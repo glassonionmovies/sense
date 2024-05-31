@@ -2,7 +2,7 @@ import cv2
 from fastsam import FastSAM, FastSAMPrompt
 
 # Initialize the model
-model = FastSAM('./weights/FastSAM-x.pt')
+model = FastSAM('/home/ms/code/sense/fast_sam/../../FastSAM/weights/FastSAM-x.pt')
 DEVICE = 'mps'
 
 # Function to process and display each frame
