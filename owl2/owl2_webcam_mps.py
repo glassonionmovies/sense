@@ -6,7 +6,7 @@ from transformers import Owlv2Processor, Owlv2ForObjectDetection
 global processor
 global model
 global perform_owl
-perform_owl = 0
+perform_owl = 1
 
 
 def load_model():
@@ -31,6 +31,7 @@ def load_model():
 
 
 def owl2(frame, texts):
+
     inputs = processor(text=texts, images=frame, return_tensors="pt")
     inputs = {key: tensor.to(device) for key, tensor in inputs.items()}  # Move input tensors to the device
     outputs = model(**inputs)
@@ -39,7 +40,24 @@ def owl2(frame, texts):
     target_sizes = torch.Tensor([frame.shape[:2]])
     # Convert outputs (bounding boxes and class logits) to Pascal VOC Format (xmin, ymin, xmax, ymax)
     results = processor.post_process_object_detection(outputs=outputs, target_sizes=target_sizes, threshold=0.2)
-    return results
+
+    i = 0  # Retrieve predictions for the first image for the corresponding text queries
+    text = texts[i]
+    boxes, scores, labels = results[i]["boxes"], results[i]["scores"], results[i]["labels"]
+
+    box_to_mask = [0, 0, 0, 0]
+    for box, score, label in zip(boxes, scores, labels):
+        box = [round(i, 2) for i in box.tolist()]
+        print(f" {text[label]}  confidence {round(score.item(), 3)} at  {box}")
+
+        # Draw bounding box on the frame
+        box = [int(b) for b in box]
+        cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
+        cv2.putText(frame, f"{text[label]}: {round(score.item(), 3)}", (box[0], box[1] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        box_to_mask = box
+
+    return box_to_mask
 
 
 def capture_webcam_and_display(texts):
@@ -71,23 +89,8 @@ def capture_webcam_and_display(texts):
 
         if(perform_owl == 1):
 
-            results=owl2(frame, texts)
-            i = 0  # Retrieve predictions for the first image for the corresponding text queries
-            text = texts[i]
-            boxes, scores, labels = results[i]["boxes"], results[i]["scores"], results[i]["labels"]
-            for box, score, label in zip(boxes, scores, labels):
-                box = [round(i, 2) for i in box.tolist()]
-                print(f" {text[label]}  confidence {round(score.item(), 3)} at  {box}")
-
-                # Draw bounding box on the frame
-                box = [int(b) for b in box]
-                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
-                cv2.putText(frame, f"{text[label]}: {round(score.item(), 3)}", (box[0], box[1] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                box_to_mask=box
-
-
-
+            box_to_mask=owl2(frame, texts)
+\
         print(box_to_mask)
 
         # Calculate FPS
