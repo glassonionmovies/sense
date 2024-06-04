@@ -8,7 +8,7 @@ from PIL import Image
 import requests
 import os
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-
+#export PYTORCH_ENABLE_MPS_FALLBACK=1
 
 
 global processor_owl
@@ -20,6 +20,20 @@ global processor_depth
 global model_depth
 global perform_depth
 perform_depth = 1
+
+global box_to_mask
+
+
+cv2.namedWindow('Object Detection', cv2.WINDOW_NORMAL)
+cv2.namedWindow('Depth Frame', cv2.WINDOW_NORMAL)
+cv2.namedWindow('Angle Frame', cv2.WINDOW_NORMAL)
+
+cv2.moveWindow("Object Detection", 0, 0)    # Move to top left corner (0, 0)
+cv2.moveWindow("Depth Frame", 0, 400)  # Move to bottom left corner (0, screen_height - window_height)
+cv2.moveWindow("Angle Frame", 300, 0)  # Move offsite by 300 pixels to the right of Window 1
+
+
+
 
 def load_model_depth():
     global processor_depth
@@ -180,33 +194,30 @@ def capture_webcam_and_display(texts):
         # Increment frame count
         frame_count += 1
 
-
         box_to_mask = [0.12, 445.85, 180.11, 883.16]
 
-        # Perform object detection
-
         if(perform_owl == 1):
+
             box_to_mask=owl2(frame, texts)
+
+            elapsed_time = time.time() - start_time
+            fps = frame_count / elapsed_time
+
+            cv2.putText(frame, f"FPS: {round(fps, 2)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.imshow('Object Detection', frame)
             print(box_to_mask)
 \
         if(perform_depth == 1):
-            frame = depth_anything(frame)
 
-        box=box_to_mask
-        cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
+            box = box_to_mask
+            depth_frame = depth_anything(frame)
+            cv2.imshow('Depth Frame', depth_frame)
 
+        #cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
 
-        frame=mask_angle(frame,box_to_mask)
+        #angle_frame=mask_angle(frame,box_to_mask)
+        angle_frame = mask_angle(depth_frame, box_to_mask)
 
-        # Calculate FPS
-        elapsed_time = time.time() - start_time
-        fps = frame_count / elapsed_time
-
-        # Display FPS on the frame
-        cv2.putText(frame, f"FPS: {round(fps, 2)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-        # Display the frame
-        cv2.imshow('Object Detection', frame)
 
         # Check for the 'q' key to quit the loop
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -220,6 +231,6 @@ def capture_webcam_and_display(texts):
 if __name__ == "__main__":
     device = load_model_owl()
     load_model_depth()
-    texts = [["a person face", "eyes"]]
+    texts = [["a pen", "a cup", "a bottle"]]
 
     capture_webcam_and_display(texts)
