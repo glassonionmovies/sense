@@ -5,6 +5,8 @@ from transformers import Owlv2Processor, Owlv2ForObjectDetection
 
 global processor
 global model
+global perform_owl
+perform_owl = 0
 
 
 def load_model():
@@ -40,7 +42,8 @@ def owl2(frame, texts):
     return results
 
 
-def capture_webcam_and_display(device):
+def capture_webcam_and_display(texts):
+
     # Open the video capture device (webcam 0)
     cap = cv2.VideoCapture(0)
 
@@ -61,21 +64,31 @@ def capture_webcam_and_display(device):
         # Increment frame count
         frame_count += 1
 
-        # Perform object detection
-        texts = [["a person face", "eyes"]]
-        results=owl2(frame, texts)
-        i = 0  # Retrieve predictions for the first image for the corresponding text queries
-        text = texts[i]
-        boxes, scores, labels = results[i]["boxes"], results[i]["scores"], results[i]["labels"]
-        for box, score, label in zip(boxes, scores, labels):
-            box = [round(i, 2) for i in box.tolist()]
-            print(f"Detected {text[label]} with confidence {round(score.item(), 3)} at location {box}")
 
-            # Draw bounding box on the frame
-            box = [int(b) for b in box]
-            cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
-            cv2.putText(frame, f"{text[label]}: {round(score.item(), 3)}", (box[0], box[1] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        box_to_mask = [0.12, 445.85, 180.11, 883.16]
+
+        # Perform object detection
+
+        if(perform_owl == 1):
+
+            results=owl2(frame, texts)
+            i = 0  # Retrieve predictions for the first image for the corresponding text queries
+            text = texts[i]
+            boxes, scores, labels = results[i]["boxes"], results[i]["scores"], results[i]["labels"]
+            for box, score, label in zip(boxes, scores, labels):
+                box = [round(i, 2) for i in box.tolist()]
+                print(f" {text[label]}  confidence {round(score.item(), 3)} at  {box}")
+
+                # Draw bounding box on the frame
+                box = [int(b) for b in box]
+                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
+                cv2.putText(frame, f"{text[label]}: {round(score.item(), 3)}", (box[0], box[1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                box_to_mask=box
+
+
+
+        print(box_to_mask)
 
         # Calculate FPS
         elapsed_time = time.time() - start_time
@@ -98,4 +111,6 @@ def capture_webcam_and_display(device):
 
 if __name__ == "__main__":
     device = load_model()
-    capture_webcam_and_display(device)
+    texts = [["a person face", "eyes"]]
+
+    capture_webcam_and_display(texts)
