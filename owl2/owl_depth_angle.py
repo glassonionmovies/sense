@@ -19,7 +19,7 @@ perform_owl = 1
 global processor_depth
 global model_depth
 global perform_depth
-perform_depth = 0
+perform_depth = 1
 
 global box_to_mask
 
@@ -68,10 +68,20 @@ def calculate_angle(point1, point2):
 
 # Function to mask the angle of the longest side of the contour
 def mask_angle(frame, box):
+    # Calculate the center of the original box
+    center_x = (box[2] + box[0]) / 2
+    center_y = (box[3] + box[1]) / 2
 
-    a=0.2
-    box = [box[0]*(1-a), box[1]*(1-a), box[2]*(1+a), box[3]*(1+a)]
+    # Enlarge the box by 20% while keeping the center the same
+    enlargement_factor = 0.20
+    bigger_box = [
+        center_x - (center_x - box[0]) * (1 + enlargement_factor),  # x_min
+        center_y - (center_y - box[1]) * (1 + enlargement_factor),  # y_min
+        center_x + (box[2] - center_x) * (1 + enlargement_factor),  # x_max
+        center_y + (box[3] - center_y) * (1 + enlargement_factor)  # y_max
+    ]
 
+    box=bigger_box
     # Convert the color image to grayscale
     gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -226,10 +236,13 @@ def read_image_and_display(frame, texts):
 
     cv2.waitKey(9000)
 
-def capture_webcam_and_display(texts):
+def capture_webcam_and_display(texts, videofile):
 
     # Open the video capture device (webcam 0)
-    cap = cv2.VideoCapture(0)
+    if(videofile is not None):
+        cap = cv2.VideoCapture(videofile)
+    else:
+        cap = cv2.VideoCapture(0)
 
     # Check if the webcam is opened successfully
     if not cap.isOpened():
@@ -258,7 +271,7 @@ def capture_webcam_and_display(texts):
             fps = frame_count / elapsed_time
 
             cv2.putText(frame, f"FPS: {round(fps, 2)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.imshow('Object Detection', frame)
+            #cv2.imshow('Object Detection', frame)
             print(box_to_mask)
 
         if(perform_depth == 1):
@@ -287,11 +300,14 @@ def capture_webcam_and_display(texts):
 if __name__ == "__main__":
     device = load_model_owl()
     load_model_depth()
-    texts = [["a red block", "a green block", "a wooden block"]]
+    texts = [["a red block", "a green block"]]
 
-    img = cv2.imread("/Users/ms/Downloads/w.jpg")
 
     #capture_webcam_and_display(texts)
+    capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid.mov")
+
+
+    img = cv2.imread("/Users/ms/Downloads/w.jpg")
     read_image_and_display(img,texts)
 
 
