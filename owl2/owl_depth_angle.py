@@ -19,7 +19,7 @@ perform_owl = 1
 global processor_depth
 global model_depth
 global perform_depth
-perform_depth = 1
+perform_depth = 0
 
 global box_to_mask
 
@@ -33,6 +33,92 @@ cv2.moveWindow("Depth Frame", 0, 400)  # Move to bottom left corner (0, screen_h
 cv2.moveWindow("Angle Frame", 300, 0)  # Move offsite by 300 pixels to the right of Window 1
 
 
+# Function to calculate length of a contour
+def calculate_contour_length(contour):
+    return cv2.arcLength(contour, True)
+
+# Function to check if a contour is outside the padding area and the box
+def is_contour_inside_box(contour, image_shape, box, padding_percentage=0.01):
+    x, y, w, h = cv2.boundingRect(contour)
+    image_height, image_width = image_shape[:2]
+    padding_x = int(padding_percentage * image_width)
+    padding_y = int(padding_percentage * image_height)
+
+    if (x >= padding_x and y >= padding_y and
+            (x + w) <= (image_width - padding_x) and
+            (y + h) <= (image_height - padding_y) and
+            box[0] <= x and box[1] <= y and box[2] >= (x + w) and box[3] >= (y + h)):
+        return True
+    return False
+
+# Function to find the longest side of a polygon
+def find_longest_side(points):
+    max_length = 0
+    longest_side = None
+    for i in range(len(points)):
+        length = np.linalg.norm(points[i] - points[(i + 1) % len(points)])
+        if length > max_length:
+            max_length = length
+            longest_side = (points[i], points[(i + 1) % len(points)])
+    return longest_side
+
+# Function to calculate the angle between two points
+def calculate_angle(point1, point2):
+    return np.arctan2(point2[1] - point1[1], point2[0] - point1[0]) * 180 / np.pi
+
+# Function to mask the angle of the longest side of the contour
+def mask_angle(frame, box):
+
+    a=0.2
+    box = [box[0]*(1-a), box[1]*(1-a), box[2]*(1+a), box[3]*(1+a)]
+
+    # Convert the color image to grayscale
+    gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Apply Gaussian blur to reduce noise
+    blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
+
+    # Apply Canny edge detection
+    edges = cv2.Canny(blurred_image, 50, 150)
+
+    # Find contours in the edge-detected image
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Filter contours based on proximity to the edge of the frame and the rectangular box
+    valid_contours = [cnt for cnt in contours if is_contour_inside_box(cnt, frame.shape, box)]
+
+    # Calculate length for each contour
+    lengths = [calculate_contour_length(contour) for contour in valid_contours]
+
+    # Find the index of the contour with maximum length
+    if lengths:
+        max_length_index = lengths.index(max(lengths))
+        longest_contour = valid_contours[max_length_index]
+
+        # Approximate the contour with a polygon
+        epsilon = 0.01 * cv2.arcLength(longest_contour, True)
+        approx = cv2.approxPolyDP(longest_contour, epsilon, True)
+
+        # Find the longest side of the polygon
+        longest_side = find_longest_side(approx[:, 0])
+
+        # Draw the longest side of the polygon in yellow
+        cv2.line(frame, tuple(longest_side[0]), tuple(longest_side[1]), (0, 255, 255), thickness=5)  # Yellow thick line
+
+        cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0),
+                      thickness=2)  # Green box
+
+        cv2.drawContours(frame, valid_contours, -1, (0, 0, 255), thickness=2)
+
+        # Calculate the angle of the yellow line
+        angle = calculate_angle(longest_side[0], longest_side[1])
+        cv2.imshow('Color Image with Longest Contour and Longest Side', frame)
+        print("Angle of the yellow line:", angle)
+        return(angle)
+
+    else:
+        print("No contours found.")
+        return(-1)
 
 
 def load_model_depth():
@@ -63,62 +149,6 @@ def load_model_owl():
     return torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 
-def mask_angle(frame, box_to_mask):
-    x, y, x1, y1 = [int(coord) for coord in box_to_mask]
-
-    # Print the coordinates to debug
-    print(f"Box coordinates: x={x}, y={y}, x1={x1}, y1={y1}")
-
-    # Check if the box coordinates are valid
-    if x >= 0 and y >= 0 and x1 > x and y1 > y:
-        mask_frame = frame[y:y1, x:x1]  # Extract the region within the box
-
-        # Print the shape of the extracted region
-        print(f"Mask frame shape: {mask_frame.shape}")
-
-        mask_frame_pil = Image.fromarray(mask_frame)  # Convert to PIL Image
-
-        # Find the angle of the mask
-        mask_cv = np.array(mask_frame_pil)
-
-        # Find the Contours
-        contours, _ = cv2.findContours(mask_cv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        if contours:
-            # Find the Convex Hull of the largest contour
-            largest_contour = max(contours, key=cv2.contourArea)
-            hull = cv2.convexHull(largest_contour)
-
-            # Find the Minimum Area Rectangle
-            rect = cv2.minAreaRect(hull)
-            box = cv2.boxPoints(rect)
-            box = np.intp(box)  # Use np.intp instead of np.int0
-
-            # Calculate the Angle
-            angle = rect[-1]
-
-            # Adjust angle to be within the range [-90, 90]
-            if angle < -45:
-                angle += 90
-
-            print(f"The angle of the mask is: {angle:.2f} degrees")
-
-            # Optionally, draw the box on the mask image for visualization
-            mask_with_box = cv2.cvtColor(mask_cv, cv2.COLOR_GRAY2BGR)
-            cv2.drawContours(mask_with_box, [box], 0, (0, 255, 0), 2)
-            cv2.imshow(f"./mask_with_box.png", mask_with_box)
-
-            return mask_with_box  # Return the modified frame
-
-        else:
-            print("No contours found in the mask.")
-            return frame  # Return the original frame if no contours are found
-
-    else:
-        print("Invalid box coordinates.")
-        return frame  # Return the original frame
-
-
 
 
 def owl2(frame, texts):
@@ -136,19 +166,26 @@ def owl2(frame, texts):
     text = texts[i]
     boxes, scores, labels = results[i]["boxes"], results[i]["scores"], results[i]["labels"]
 
-    box_to_mask = [0, 0, 0, 0]
+    largest_box = None
+    max_area = 0
+
     for box, score, label in zip(boxes, scores, labels):
         box = [round(i, 2) for i in box.tolist()]
         print(f" {text[label]}  confidence {round(score.item(), 3)} at  {box}")
+
+        area = (box[2] - box[0]) * (box[3] - box[1])
+        if area > max_area:
+            max_area = area
+            largest_box = box
 
         # Draw bounding box on the frame
         box = [int(b) for b in box]
         cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
         cv2.putText(frame, f"{text[label]}: {round(score.item(), 3)}", (box[0], box[1] - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        box_to_mask = box
 
-    return box_to_mask
+
+    return largest_box
 
 def depth_anything(frame):
     inputs = processor_depth(images=frame, return_tensors="pt")
@@ -171,6 +208,23 @@ def depth_anything(frame):
     formatted = (output * 255 / np.max(output)).astype("uint8")
     depth = Image.fromarray(formatted)
     return np.array(depth)
+
+
+
+def read_image_and_display(frame, texts):
+    box_to_mask = owl2(frame, texts)
+    print("box to mask is")
+    print(box_to_mask)
+    cv2.imshow('Object Detection', frame)
+
+    #box_to_mask = [328.12, 339.39, 462.61, 398.48]
+    box = box_to_mask
+    depth_frame = depth_anything(frame)
+    cv2.imshow('Depth Frame', depth_frame)
+    angle = mask_angle(frame, box_to_mask)
+    print("angle ", angle)
+
+    cv2.waitKey(9000)
 
 def capture_webcam_and_display(texts):
 
@@ -206,7 +260,7 @@ def capture_webcam_and_display(texts):
             cv2.putText(frame, f"FPS: {round(fps, 2)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             cv2.imshow('Object Detection', frame)
             print(box_to_mask)
-\
+
         if(perform_depth == 1):
 
             box = box_to_mask
@@ -215,8 +269,10 @@ def capture_webcam_and_display(texts):
 
         #cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
 
-        #angle_frame=mask_angle(frame,box_to_mask)
-        angle_frame = mask_angle(depth_frame, box_to_mask)
+        angle=mask_angle(frame,box_to_mask)
+        #angle_frame = mask_angle(depth_frame, box_to_mask)
+        print("angle ", angle)
+
 
 
         # Check for the 'q' key to quit the loop
@@ -231,6 +287,32 @@ def capture_webcam_and_display(texts):
 if __name__ == "__main__":
     device = load_model_owl()
     load_model_depth()
-    texts = [["a pen", "a cup", "a bottle"]]
+    texts = [["a red block", "a green block", "a wooden block"]]
 
-    capture_webcam_and_display(texts)
+    img = cv2.imread("/Users/ms/Downloads/w.jpg")
+
+    #capture_webcam_and_display(texts)
+    read_image_and_display(img,texts)
+
+
+
+    img = cv2.imread("/Users/ms/Downloads/a.jpg")
+    read_image_and_display(img,texts)
+
+    img = cv2.imread("/Users/ms/Downloads/b.jpg")
+    read_image_and_display(img,texts)
+
+    img = cv2.imread("/Users/ms/Downloads/g.jpg")
+    read_image_and_display(img,texts)
+
+    img = cv2.imread("/Users/ms/Downloads/b1.jpeg")
+    read_image_and_display(img,texts)
+    img = cv2.imread("/Users/ms/Downloads/b2.jpeg")
+    read_image_and_display(img,texts)
+    img = cv2.imread("/Users/ms/Downloads/b3.jpeg")
+    read_image_and_display(img,texts)
+    img = cv2.imread("/Users/ms/Downloads/a1.jpg")
+    read_image_and_display(img,texts)
+
+    img = cv2.imread("/Users/ms/Downloads/b1.jpg")
+    read_image_and_display(img,texts)

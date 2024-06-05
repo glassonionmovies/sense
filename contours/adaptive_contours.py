@@ -5,8 +5,8 @@ import numpy as np
 def calculate_contour_length(contour):
     return cv2.arcLength(contour, True)
 
-# Function to check if a contour is outside the padding area
-def is_contour_outside_padding(contour, image_shape, padding_percentage=0.02):
+# Function to check if a contour is outside the padding area and the box
+def is_contour_inside_box(contour, image_shape, box, padding_percentage=0.01):
     x, y, w, h = cv2.boundingRect(contour)
     image_height, image_width = image_shape[:2]
     padding_x = int(padding_percentage * image_width)
@@ -14,7 +14,8 @@ def is_contour_outside_padding(contour, image_shape, padding_percentage=0.02):
 
     if (x >= padding_x and y >= padding_y and
             (x + w) <= (image_width - padding_x) and
-            (y + h) <= (image_height - padding_y)):
+            (y + h) <= (image_height - padding_y) and
+            box[0] <= x and box[1] <= y and box[2] >= (x + w) and box[3] >= (y + h)):
         return True
     return False
 
@@ -33,56 +34,77 @@ def find_longest_side(points):
 def calculate_angle(point1, point2):
     return np.arctan2(point2[1] - point1[1], point2[0] - point1[0]) * 180 / np.pi
 
-# Read the input color image
-color_image = cv2.imread('/Users/ms/Downloads/m.jpg')
+# Function to mask the angle of the longest side of the contour
+def mask_angle(frame, box):
 
-# Convert the color image to grayscale
-gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+    a=0.2
+    box = [box[0]*(1-a), box[1]*(1-a), box[2]*(1+a), box[3]*(1+a)]
 
-# Apply Gaussian blur to reduce noise
-blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
+    # Convert the color image to grayscale
+    gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-# Apply Canny edge detection
-edges = cv2.Canny(blurred_image, 50, 150)
+    # Apply Gaussian blur to reduce noise
+    blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
 
-# Find contours in the edge-detected image
-contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Apply Canny edge detection
+    edges = cv2.Canny(blurred_image, 50, 150)
 
-# Filter contours based on proximity to the edge of the frame
-valid_contours = [cnt for cnt in contours if is_contour_outside_padding(cnt, color_image.shape)]
+    # Find contours in the edge-detected image
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-# Calculate length for each contour
-lengths = [calculate_contour_length(contour) for contour in valid_contours]
+    # Filter contours based on proximity to the edge of the frame and the rectangular box
+    valid_contours = [cnt for cnt in contours if is_contour_inside_box(cnt, frame.shape, box)]
 
-# Find the index of the contour with maximum length
-if lengths:
-    max_length_index = lengths.index(max(lengths))
-    longest_contour = valid_contours[max_length_index]
+    # Calculate length for each contour
+    lengths = [calculate_contour_length(contour) for contour in valid_contours]
 
-    print("Length of the longest contour:", max(lengths))
+    # Find the index of the contour with maximum length
+    if lengths:
+        max_length_index = lengths.index(max(lengths))
+        longest_contour = valid_contours[max_length_index]
 
-    # Approximate the contour with a polygon
-    epsilon = 0.01 * cv2.arcLength(longest_contour, True)
-    approx = cv2.approxPolyDP(longest_contour, epsilon, True)
+        # Approximate the contour with a polygon
+        epsilon = 0.01 * cv2.arcLength(longest_contour, True)
+        approx = cv2.approxPolyDP(longest_contour, epsilon, True)
 
-    # Find the longest side of the polygon
-    longest_side = find_longest_side(approx[:, 0])
+        # Find the longest side of the polygon
+        longest_side = find_longest_side(approx[:, 0])
 
-    # Draw the polygon on the color image
-    color_image_with_polygon = color_image.copy()
-    cv2.drawContours(color_image_with_polygon, [approx], -1, (255, 255, 255), thickness=2)  # White polygon
+        # Draw the longest side of the polygon in yellow
+        cv2.line(frame, tuple(longest_side[0]), tuple(longest_side[1]), (0, 255, 255), thickness=5)  # Yellow thick line
 
-    # Draw the longest side of the polygon in yellow
-    cv2.line(color_image_with_polygon, tuple(longest_side[0]), tuple(longest_side[1]), (0, 255, 255), thickness=5)  # Yellow thick line
+        cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0),
+                      thickness=2)  # Green box
 
-    # Calculate the angle of the yellow line
-    angle = calculate_angle(longest_side[0], longest_side[1])
-    print("Angle of the yellow line:", angle)
+        cv2.drawContours(frame, valid_contours, -1, (0, 0, 255), thickness=2)
 
-else:
-    print("No contours found.")
+        # Calculate the angle of the yellow line
+        angle = calculate_angle(longest_side[0], longest_side[1])
+        cv2.imshow('Color Image with Longest Contour and Longest Side', frame)
+        print("Angle of the yellow line:", angle)
+        return(angle)
 
-# Display the color image with the longest contour and polygon
-cv2.imshow('Color Image with Longest Contour and Longest Side', color_image_with_polygon)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+    else:
+        print("No contours found.")
+        return(-1)
+
+# Main function
+def main():
+    # Read the input color image
+    color_image = cv2.imread('/Users/ms/Downloads/w.jpg')
+
+    # Hardcoded box format [x_min, y_min, x_max, y_max]
+    box = [399.98, 68.1, 601.75, 305.76]
+
+    # Call the mask_angle function
+    mask_angle(color_image, box)
+
+    # Display the color image with the longest contour and polygon
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
+
