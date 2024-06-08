@@ -8,21 +8,25 @@ from PIL import Image
 
 import os
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-# export PYTORCH_ENABLE_MPS_FALLBACK=1
-
-DEBUG = False  # Set to True for debug mode, False for normal mode
-
 global processor_owl
 global model_owl
 global perform_owl
-perform_owl = 1
-
 global processor_depth
 global model_depth
 global perform_depth
-perform_depth = 1
-
 global box_to_mask
+
+# export PYTORCH_ENABLE_MPS_FALLBACK=1
+perform_depth = 1
+DEBUG = False  # Set to True for debug mode, False for normal mode
+perform_owl = 1
+
+SHOW_OBJECT_DETECTION = False
+SHOW_DEPTH_FRAME_FULL = False
+SHOW_ANGLE_FRAME = True
+SHOW_DEPTH_FRAME_BOXED = True
+
+
 
 cv2.namedWindow('Object Detection', cv2.WINDOW_NORMAL)
 cv2.namedWindow('Depth Frame', cv2.WINDOW_NORMAL)
@@ -93,8 +97,9 @@ def find_average_depth(depth_image, min_depth, max_depth):
     min_depth_found = np.min(object_depth_values)
     max_depth_found = np.max(object_depth_values)
 
-    print(f"Minimum Depth of the Object: {min_depth_found}")
-    print(f"Maximum Depth of the Object: {max_depth_found}")
+    if DEBUG:
+        print(f"Minimum Depth of the Object: {min_depth_found}")
+        print(f"Maximum Depth of the Object: {max_depth_found}")
 
     colored_mask = cv2.applyColorMap(object_mask, cv2.COLORMAP_JET)
 
@@ -103,9 +108,11 @@ def find_average_depth(depth_image, min_depth, max_depth):
     overlay = cv2.addWeighted(depth_colored, 0.7, colored_mask, 0.3, 0)
 
     # Display the images
-    cv2.imshow('Depth Image', depth_colored)
-    cv2.imshow('Object Mask', colored_mask)
-    cv2.imshow('Overlay', overlay)
+    if SHOW_DEPTH_FRAME_BOXED:
+        cv2.imshow('Depth Image', depth_colored)
+
+    #cv2.imshow('Object Mask', colored_mask)
+    #cv2.imshow('Overlay', overlay)
 
 
     return average_depth
@@ -183,7 +190,10 @@ def mask_angle(frame, box):
 
         # Calculate the angle of the yellow line
         angle = calculate_angle(longest_side[0], longest_side[1])
-        cv2.imshow('Color Image with Longest Contour and Longest Side', frame)
+
+        if SHOW_ANGLE_FRAME:
+            cv2.imshow('Angle Frame', frame)
+
         if DEBUG:
             print("Angle of the yellow line:", angle)
         return angle
@@ -252,6 +262,9 @@ def owl2(frame, texts):
         cv2.putText(frame, f"{text[label]}: {round(score.item(), 3)}", (box[0], box[1] - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
+        if SHOW_OBJECT_DETECTION:
+            cv2.imshow('Object Detection', frame)
+
     return largest_box
 
 def depth_anything(frame):
@@ -274,36 +287,29 @@ def depth_anything(frame):
     output = prediction.squeeze().cpu().numpy()  # Changed to use CPU for visualization
     formatted = (output * 255 / np.max(output)).astype("uint8")
     depth = Image.fromarray(formatted)
-    return np.array(depth)
+    depth_img = np.array(depth)
+
+    if SHOW_DEPTH_FRAME_FULL:
+        cv2.imshow('Depth Frame Full', depth_img)
+
+    return depth_img
 
 def read_image_and_display(frame, texts):
-    box_to_mask = owl2(frame, texts)
-    if DEBUG:
-        print("box to mask is")
-        print(box_to_mask)
-    cv2.imshow('Object Detection', frame)
-
-    # box_to_mask = [328.12, 339.39, 462.61, 398.48]
-    box = box_to_mask
+    box = owl2(frame, texts)
     depth_frame = depth_anything(frame)
 
-    if (box_to_mask is not None):
+    if (box is not None):
         depth_image_box =  depth_frame[int(box[1]):int(box[3]), int(box[0]):int(box[2])]
         min_depth = 0  # Example minimum depth value
         max_depth = 1500000  # Example maximum depth value
-
         average_depth = find_average_depth(depth_image_box, min_depth, max_depth)
         print(f"Average Depth of the Object: {average_depth}")
-
-
-
-    cv2.imshow('Depth Frame', depth_frame)
-    if(box_to_mask is not None):
-        angle = mask_angle(frame, box_to_mask)
+        angle = mask_angle(frame, box)
     if DEBUG:
         print("angle ", angle)
+        print("average_depth ", average_depth)
 
-    cv2.waitKey(9000)
+
 
 def capture_webcam_and_display(texts, videofile=None):
     # Open the video capture device (webcam 0)
@@ -330,30 +336,7 @@ def capture_webcam_and_display(texts, videofile=None):
         # Increment frame count
         frame_count += 1
 
-        box_to_mask = [0.12, 445.85, 180.11, 883.16]
-
-        if perform_owl == 1:
-            box_to_mask = owl2(frame, texts)
-
-            elapsed_time = time.time() - start_time
-            fps = frame_count / elapsed_time
-
-            cv2.putText(frame, f"FPS: {round(fps, 2)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            # cv2.imshow('Object Detection', frame)
-            if DEBUG:
-                print(box_to_mask)
-
-        if perform_depth == 1:
-            box = box_to_mask
-            depth_frame = depth_anything(frame)
-            cv2.imshow('Depth Frame', depth_frame)
-
-        # cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
-
-        angle = mask_angle(frame, box_to_mask)
-        # angle_frame = mask_angle(depth_frame, box_to_mask)
-        if DEBUG:
-            print("angle ", angle)
+        read_image_and_display(frame, texts)
 
         # Check for the 'q' key to quit the loop
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -367,29 +350,37 @@ if __name__ == "__main__":
     device = load_model_owl()
     load_model_depth()
     # texts = [["a red block", "a green block"]]
-    texts = [["green block", "eyeglasses"]]
+    texts = [["a green block", "a wooden block"]]
 
     #capture_webcam_and_display(texts)
     #capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid.mov")
 
     img = cv2.imread("/Users/ms/Downloads/w.jpg")
     read_image_and_display(img, texts)
+    cv2.waitKey(9000)
 
     img = cv2.imread("/Users/ms/Downloads/a.jpg")
     read_image_and_display(img, texts)
+    cv2.waitKey(9000)
 
     img = cv2.imread("/Users/ms/Downloads/b.jpg")
     read_image_and_display(img, texts)
+    cv2.waitKey(9000)
 
     img = cv2.imread("/Users/ms/Downloads/g.jpg")
     read_image_and_display(img, texts)
+    cv2.waitKey(9000)
 
+    texts = [["books", "a book"]]
     img = cv2.imread("/Users/ms/Downloads/b1.jpeg")
     read_image_and_display(img, texts)
+    cv2.waitKey(9000)
     img = cv2.imread("/Users/ms/Downloads/b2.jpeg")
     read_image_and_display(img, texts)
+    cv2.waitKey(9000)
     img = cv2.imread("/Users/ms/Downloads/b3.jpeg")
     read_image_and_display(img, texts)
+    cv2.waitKey(9000)
     img = cv2.imread("/Users/ms/Downloads/a1.jpg")
     read_image_and_display(img, texts)
 
