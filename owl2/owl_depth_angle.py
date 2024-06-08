@@ -101,10 +101,15 @@ def find_average_depth(depth_image, min_depth, max_depth):
         print(f"Minimum Depth of the Object: {min_depth_found}")
         print(f"Maximum Depth of the Object: {max_depth_found}")
 
+
+
+
     colored_mask = cv2.applyColorMap(object_mask, cv2.COLORMAP_JET)
 
+    depth_image_uint8 = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+
     # Overlay the mask on the depth image for visualization
-    depth_colored = cv2.applyColorMap(depth_image, cv2.COLORMAP_JET)
+    depth_colored = cv2.applyColorMap(depth_image_uint8, cv2.COLORMAP_JET)
     overlay = cv2.addWeighted(depth_colored, 0.7, colored_mask, 0.3, 0)
 
     # Display the images
@@ -237,7 +242,7 @@ def owl2(frame, texts):
     # Target image sizes (height, width) to rescale box predictions [batch_size, 2]
     target_sizes = torch.Tensor([frame.shape[:2]])
     # Convert outputs (bounding boxes and class logits) to Pascal VOC Format (xmin, ymin, xmax, ymax)
-    results = processor_owl.post_process_object_detection(outputs=outputs, target_sizes=target_sizes, threshold=0.2)
+    results = processor_owl.post_process_object_detection(outputs=outputs, target_sizes=target_sizes, threshold=0.5)
 
     i = 0  # Retrieve predictions for the first image for the corresponding text queries
     text = texts[i]
@@ -292,7 +297,7 @@ def depth_anything(frame):
     if SHOW_DEPTH_FRAME_FULL:
         cv2.imshow('Depth Frame Full', depth_img)
 
-    return depth_img
+    return output
 
 def read_image_and_display(frame, texts):
     box = owl2(frame, texts)
@@ -352,8 +357,9 @@ if __name__ == "__main__":
     # texts = [["a red block", "a green block"]]
     texts = [["a green block", "a wooden block"]]
 
-    #capture_webcam_and_display(texts)
-    #capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid.mov")
+    #texts = [["face", "a human face"]];capture_webcam_and_display(texts)
+    #texts = [["a yellow wooden cube", "a green cube"]];capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid1.mov")
+    texts = [["a green wooden block"]];capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid_green.mov")
 
     img = cv2.imread("/Users/ms/Downloads/w.jpg")
     read_image_and_display(img, texts)
