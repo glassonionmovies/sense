@@ -1,16 +1,24 @@
 import cv2
 import numpy as np
-from stereo_utils import DLT, get_projection_matrix, _convert_to_homogeneous, load_image
+from stereo_utils import *
+from stereo_utils import _convert_to_homogeneous
 
 def main():
     # Path to image file and camera parameters
-    image_path = '/Users/ms/code/random/joined/camera0.png'
+    image_path = '/Users/ms/code/random/joined/camera17.png'
     base_path = 'permanent_calibration_ipad/'
+
+
 
     # Load the specified image
     img = load_image(image_path)
     if img is None:
         return
+
+
+    calibration_file='/Users/ms/code/random/python_stereo_camera_calibrate/calibration_settings.yaml'
+    parse_calibration_settings_file(calibration_file)
+    get_and_save_camera_extrinsics(base_path, img)
 
     height, width, _ = img.shape
 
