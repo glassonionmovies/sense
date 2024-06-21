@@ -292,6 +292,56 @@ def owl2(frame, texts, conf):
 
     return largest_box
 
+def owl2_max_conf(frame, texts, conf):
+    inputs = processor_owl(text=texts, images=frame, return_tensors="pt")
+    inputs = {key: tensor.to(device) for key, tensor in inputs.items()}  # Move input tensors to the device
+    outputs = model_owl(**inputs)
+
+    # Target image sizes (height, width) to rescale box predictions [batch_size, 2]
+    target_sizes = torch.Tensor([frame.shape[:2]])
+    # Convert outputs (bounding boxes and class logits) to Pascal VOC Format (xmin, ymin, xmax, ymax)
+    results = processor_owl.post_process_object_detection(outputs=outputs, target_sizes=target_sizes, threshold=conf)
+
+    i = 0  # Retrieve predictions for the first image for the corresponding text queries
+    text = texts[i]
+    boxes, scores, labels = results[i]["boxes"], results[i]["scores"], results[i]["labels"]
+
+    max_conf_box = None
+    max_conf_score = 0
+
+    for box, score, label in zip(boxes, scores, labels):
+        box = [round(i, 2) for i in box.tolist()]
+        if DEBUG:
+            print(f"{text[label]}  confidence {round(score.item(), 3)} at {box}")
+
+        # Track the box with the highest confidence score
+        if score.item() > max_conf_score:
+            max_conf_score = score.item()
+            max_conf_box = box
+
+    if max_conf_box is not None:
+        # Draw the bounding box with the highest confidence score on the frame
+        box = [int(b) for b in max_conf_box]
+        cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
+        cv2.putText(frame, f"{text[labels[0]]}: {round(max_conf_score, 3)}", (box[0], box[1] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        # Calculate center coordinates of the box
+        center_x = (box[0] + box[2]) // 2
+        center_y = (box[1] + box[3]) // 2
+
+        # Draw a red circle at the center of the box
+        cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+
+        # Display center coordinates on the frame
+        cv2.putText(frame, f"Center: ({center_x}, {center_y})", (box[0], box[1] - 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        if SHOW_OBJECT_DETECTION:
+            cv2.imshow('Object Detection', frame)
+
+    return max_conf_box
+
 def depth_anything(frame):
     inputs = processor_depth(images=frame, return_tensors="pt")
     inputs = {key: tensor.to(device) for key, tensor in inputs.items()}  # Move input tensors to the device
@@ -330,9 +380,11 @@ def read_image_and_display(frame, texts):
     left_image = frame[:, :width // 2]
     right_image = frame[:, width // 2:]
 
-    conf=0.25
-    left_box = owl2(left_image, texts, conf)
-    right_box = owl2(right_image, texts, conf)
+    conf=0.35
+    box_size_diff_threshold=0.5
+    box_center_diff_threshold=0.1
+    left_box = owl2_max_conf(left_image, texts, conf)
+    right_box = owl2_max_conf(right_image, texts, conf)
 
     rejoined_image = np.concatenate((left_image, right_image), axis=1)
     cv2.imshow('Rejoined Image', rejoined_image)
@@ -342,19 +394,60 @@ def read_image_and_display(frame, texts):
 
     if left_box is not None and right_box is not None:
 
-        #depth_image_box =  depth_frame[int(box[1]):int(box[3]), int(box[0]):int(box[2])]
-        #min_depth = 0; max_depth = 1500000  # Example maximum depth value
-        #average_depth = find_average_depth(depth_image_box, min_depth, max_depth)
-        #print(f"Average Depth of the Object: {average_depth}")
-
+        left_box_size = (left_box[2] - left_box[0]) * (left_box[3] - left_box[1])
+        right_box_size = (right_box[2] - right_box[0]) * (right_box[3] - right_box[1])
         left_point = ([(left_box[0] + left_box[2]) / 2, (left_box[1] + left_box[3]) / 2])
         right_point = ([(right_box[0] + right_box[2]) / 2, (right_box[1] + right_box[3]) / 2])
-        # Calculate the 3D points using DLT
-        point3D = DLT(P1, P2, left_point, left_point)
-        print(f"point3D: ({point3D[0]:.2f}, {point3D[1]:.2f}, {point3D[2]:.2f})  Left: ({left_point[0]:.2f}, {left_point[1]:.2f})  Right: ({right_point[0]:.2f}, {right_point[1]:.2f})")
+
+
+        # Convert points to homogeneous coordinates
+        left_point = _convert_to_homogeneous(left_point)
+        right_point = _convert_to_homogeneous(right_point)
+
+
+
+        # Calculate the absolute difference between the sizes
+        size_difference = abs(left_box_size - right_box_size)
+
+        # Determine the smaller of the two box sizes
+        smaller_box_size = min(left_box_size, right_box_size)
+
+        # Calculate the normalized difference
+        if smaller_box_size != 0:
+            normalized_difference = size_difference / smaller_box_size
+        else:
+            normalized_difference = float('inf')  # Handle division by zero case
+
+        left_point_inside_right = (right_box[0] <= left_point[0] <= right_box[2] and
+                                   right_box[1] <= left_point[1] <= right_box[3])
+
+        # Check if right_point is inside left_box
+        right_point_inside_left = (left_box[0] <= right_point[0] <= left_box[2] and
+                                   left_box[1] <= right_point[1] <= left_box[3])
+
+
+        # Compare with the box_size_diff_threshold
+        if (normalized_difference < box_size_diff_threshold) : #and left_point_inside_right and right_point_inside_left:
+            # Calculate the 3D points using DLT
+            point3D = DLT(P1, P2, left_point, right_point)
+
+            if DEBUG:
+                print('p1,p2', P1, P2)
+                print('pointL1,pointL2', left_point, right_point)
+
+            print(f"point3D: ({point3D[0]:.2f}, {point3D[1]:.2f}, {point3D[2]:.2f})  Left: ({left_point[0]:.2f}, {left_point[1]:.2f})  Right: ({right_point[0]:.2f}, {right_point[1]:.2f})")
+
+            pointRef = np.array([0, 0, 0])
+
+            # Calculate the Euclidean distance between the two points
+            spatial_distance = np.linalg.norm(point3D - pointRef)
+            print(f"Spatial Distance: {spatial_distance:.2f} units")
+        else:
+            print("Cannot detect depth, because objects seem to be different sizes or positions")
+
 
     else:
-        print("Cannot detect depth. Because object is not recognized by both cameras")
+        print("Cannot detect depth, because object is not recognized by both cameras")
 
         #angle = mask_angle(frame, box)
     if DEBUG:
@@ -404,9 +497,11 @@ if __name__ == "__main__":
     base_path = '../stereo/permanent_calibration_ipad/'
     calibration_file = base_path+'calibration_settings.yaml'
     parse_calibration_settings_file(calibration_file)
+    #img_to_calib = load_image('/Users/ms/code/random/saved/ref.jpg')
     img_to_calib = load_image('/Users/ms/code/random/joined/camera1.png')
     R_W0, T_W0, R_W1, T_W1 = get_and_save_camera_extrinsics(base_path, img_to_calib)
-    print(R_W0, T_W0, R_W1, T_W1 )
+    if DEBUG:
+        print(R_W0, T_W0, R_W1, T_W1 )
 
 
     # texts = [["a red block", "a green block"]]
@@ -415,6 +510,7 @@ if __name__ == "__main__":
     #texts = [["face", "a human face"]];capture_webcam_and_display(texts)
     #texts = [["a yellow wooden cube", "a green cube"]];capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid1.mov")
     #texts = [["a green wooden block"]];capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid_green.mov")
+    #capture_webcam_and_display(texts, 0)
 
     img = cv2.imread("/Users/ms/code/random/saved/saved_image_ang_in_13.jpg")
     read_image_and_display(img, texts)
@@ -423,6 +519,8 @@ if __name__ == "__main__":
     img = cv2.imread("/Users/ms/code/random/saved/saved_image_ang_in_14.jpg")
     read_image_and_display(img, texts)
     cv2.waitKey(9000)
+
+    exit()
 
     img = cv2.imread("/Users/ms/Downloads/b.jpg")
     read_image_and_display(img, texts)
