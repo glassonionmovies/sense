@@ -65,9 +65,14 @@ def world_calibrate(cal_img):
     P1 = get_projection_matrix(left_camera_id, base_path)
     P2 = get_projection_matrix(right_camera_id, base_path)
 
+    global P1_orig, P2_orig
+    P1_orig = get_projection_matrix_orig(left_camera_id, base_path)
+    P2_orig = get_projection_matrix_orig(right_camera_id, base_path)
+
 
 def capture_webcam_and_display(texts, videofile=None):
     # Open the video capture device (webcam 0)
+    speed=10
     if videofile is not None:
         cap = cv2.VideoCapture(videofile)
     else:
@@ -91,7 +96,8 @@ def capture_webcam_and_display(texts, videofile=None):
         # Increment frame count
         frame_count += 1
 
-        read_image_and_display(frame, texts)
+        if(frame_count  % speed == 0):
+            read_image_and_display(frame, texts)
 
         # Check for the 'q' key to quit the loop
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -542,20 +548,20 @@ def read_image_and_display(frame, texts):
 
         left_point, right_point=find_matching_point(left_box, right_box, left_image, right_image)
 
-            # Calculate the 3D points using DLT
         point3D = DLT(P1, P2, left_point, right_point)
-
-        if DEBUG:
-            print('p1,p2', P1, P2)
-            print('pointL1,pointL2', left_point, right_point)
+        point3D_orig=DLT(P1_orig, P2_orig, left_point, right_point)
 
         print(f"point3D: ({point3D[0]:.2f}, {point3D[1]:.2f}, {point3D[2]:.2f})  Left: ({left_point[0]:.2f}, {left_point[1]:.2f})  Right: ({right_point[0]:.2f}, {right_point[1]:.2f})")
+        print(f"point3D_orig: ({point3D_orig[0]:.2f}, {point3D_orig[1]:.2f}, {point3D_orig[2]:.2f})  Left: ({left_point[0]:.2f}, {left_point[1]:.2f})  Right: ({right_point[0]:.2f}, {right_point[1]:.2f})")
 
         pointRef = np.array([0, 0, 0])
-
         # Calculate the Euclidean distance between the two points
         spatial_distance = np.linalg.norm(point3D - pointRef)
-        print(f"Spatial Distance: {spatial_distance:.2f} units")
+        print(f"Spatial Distance from{pointRef} : {spatial_distance:.2f} units")
+
+        spatial_distance_orig = np.linalg.norm(point3D_orig - pointRef)
+        print(f"Spatial Distance from{pointRef} : {spatial_distance_orig:.2f} units")
+
 
     else:
         print("Cannot detect depth, because object is not recognized by both cameras")
@@ -581,10 +587,10 @@ if __name__ == "__main__":
     #texts = [["a green block", "a green square"]]
 
     #texts = [["face", "a human face"]];capture_webcam_and_display(texts)
-    #texts = [["a yellow wooden cube", "a green cube"]];capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid2.mov")
+    texts = [["a yellow wooden cube", "a green cube"]];capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid_green_3.mov")
     #texts = [["a green wooden block"]];
     #capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid_green.mov")
-    capture_webcam_and_display(texts, 0)
+    #capture_webcam_and_display(texts, 0)
 
 
     img = cv2.imread("/Users/ms/code/random/saved/saved_image_ang_in_13.jpg")

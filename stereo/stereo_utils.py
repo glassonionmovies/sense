@@ -75,6 +75,13 @@ def get_projection_matrix(camera_id, base_path):
     P = cmtx @ _make_homogeneous_rep_matrix(R_world_to_camera, t_world_to_camera)[:3, :]
     return P
 
+def get_projection_matrix_orig(camera_id, base_path):
+    cmtx, dist = read_camera_parameters(camera_id, base_path)
+    R_world_to_camera, t_world_to_camera = read_rotation_translation(camera_id, base_path, '')
+    P = cmtx @ _make_homogeneous_rep_matrix(R_world_to_camera, t_world_to_camera)[:3, :]
+    return P
+
+
 
 def load_image(image_path):
     img = cv2.imread(image_path)
