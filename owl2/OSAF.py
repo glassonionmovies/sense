@@ -183,7 +183,7 @@ def owl2_max_conf(frame, texts, conf):
         center_y = (box[1] + box[3]) // 2
 
         # Draw a red circle at the center of the box
-        cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+        cv2.circle(frame, (center_x, center_y), 10, (0, 0, 255), -1)
 
         # Display center coordinates on the frame
         cv2.putText(frame, f"Center: ({center_x}, {center_y})", (box[0], box[1] - 30),
@@ -303,16 +303,28 @@ def find_matching_point(left_box, right_box, left_image, right_image):
     print(left_box, right_box)
     box_size_diff_threshold=0.8
 
-    x_min, y_min, x_max, y_max = map(int, left_box)
-    left_image_cropped = left_image[y_min:y_max, x_min:x_max]
+    mask_success_left, left_image_sammed, left_point = process_frame_with_fastsam(left_image, left_box, device='mps')
+    mask_success_right, right_image_sammed, right_point = process_frame_with_fastsam(right_image, right_box, device='mps')
+    new_height = min(left_image_sammed.shape[0], right_image_sammed.shape[0])
+    # Resize both images to the new height while maintaining aspect ratio
+    left_image_resized = cv2.resize(left_image_sammed, (
+    int(left_image_sammed.shape[1] * new_height / left_image_sammed.shape[0]), new_height))
+    right_image_resized = cv2.resize(right_image_sammed, (
+    int(right_image_sammed.shape[1] * new_height / right_image_sammed.shape[0]), new_height))
 
-    x_min, y_min, x_max, y_max = map(int, right_box)
-    right_image_cropped = right_image[y_min:y_max, x_min:x_max]
+    # Concatenate images horizontally
+    combined_image = np.concatenate((left_image_resized, right_image_resized), axis=1)
 
-    left_image_sammed = process_frame_with_fastsam(left_image_cropped, left_box, device='mps')
-    right_image_sammed = process_frame_with_fastsam(right_image_cropped, right_box, device='mps')
-    cv2.imshow('left_image_sammed', left_image_sammed)
-    cv2.imshow('right_image_sammed', right_image_sammed)
+    # Display the concatenated image using OpenCV
+    cv2.imshow('combined_masked_image', combined_image)
+
+    if (mask_success_left is False or mask_success_right is False):
+        left_point = [int((left_box[0] + left_box[2]) / 2), int((left_box[1] + left_box[3]) / 2)]
+        right_point = [int((right_box[0] + right_box[2]) / 2), int((right_box[1] + right_box[3]) / 2)]
+
+    print(left_point, right_point)
+    cv2.circle(left_image, left_point, 10, (255, 0, 0), -1)
+    cv2.circle(right_image, right_point, 10, (255, 0, 0), -1)
 
     rejoined_image = np.concatenate((left_image, right_image), axis=1)
     cv2.imshow('rejoined_image', rejoined_image)
@@ -320,8 +332,6 @@ def find_matching_point(left_box, right_box, left_image, right_image):
     left_box_size = (left_box[2] - left_box[0]) * (left_box[3] - left_box[1])
     right_box_size = (right_box[2] - right_box[0]) * (right_box[3] - right_box[1])
 
-    left_point = ([(left_box[0] + left_box[2]) / 2, (left_box[1] + left_box[3]) / 2])
-    right_point = ([(right_box[0] + right_box[2]) / 2, (right_box[1] + right_box[3]) / 2])
 
     # Convert points to homogeneous coordinates
     left_point = _convert_to_homogeneous(left_point)
@@ -437,43 +447,113 @@ def visualize_mask_with_vertices(segmentation_mask):
     plt.ylabel("Row")
     plt.legend()
     plt.show()
-def process_frame_with_fastsam(frame, largest_box, device='mps'):
-    # Save the frame as an image temporarily
-    temp_image_path = 'temp_frame.jpg'
-    cv2.imwrite(temp_image_path, frame)
 
-    input = Image.open(temp_image_path)
-    input = input.convert("RGB")
+def apply_binary_masks_to_frame(frame, binary_masks):
+    masked_frame = frame.copy()
+
+    # Define transparent purple color (BGR format)
+    purple_color = np.array([255, 0, 255], dtype=np.uint8)
+
+    # Iterate over each binary mask and apply it to the frame
+    for binary_mask in binary_masks:
+        # Ensure binary mask is of type np.uint8
+        binary_mask = binary_mask.astype(np.uint8)
+
+        # Create an image with transparent purple color
+        purple_mask = np.zeros_like(masked_frame, dtype=np.uint8)
+        purple_mask[:] = purple_color
+
+        # Apply the binary mask to the purple mask
+        masked_purple = cv2.bitwise_and(purple_mask, purple_mask, mask=binary_mask)
+
+        # Blend the masked purple with the frame using bitwise_or
+        masked_frame = cv2.addWeighted(masked_frame, 1, masked_purple, 0.5, 0)
+
+    return masked_frame
+
+
+##function below does the following
+# 1. enlarges box (mask is better)
+# 2. Create binary mask with ann[0] - Experiment what happens when ann has ann[1], ann[2] and so on - means multiple masks
+# 3.
+def process_frame_with_fastsam(full_frame, box, device='mps'):
+    mask_success = False
+    center_x = (box[2] + box[0]) / 2
+    center_y = (box[3] + box[1]) / 2
+
+    enlargement_factor = 0.66
+    bigger_box = [
+        center_x - (center_x - box[0]) * (1 + enlargement_factor),  # x_min
+        center_y - (center_y - box[1]) * (1 + enlargement_factor),  # y_min
+        center_x + (box[2] - center_x) * (1 + enlargement_factor),  # x_max
+        center_y + (box[3] - center_y) * (1 + enlargement_factor)  # y_max
+    ]
+
+    box = bigger_box
+
+    x_min, y_min, x_max, y_max = map(int, box)
+    cropped_frame = full_frame[y_min:y_max, x_min:x_max]
+    input = Image.fromarray(cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB))
 
     # Run FastSAM on the captured frame
-
     everything_results = fast_same_model(input, device=device, retina_masks=True, conf=0.1, iou=0.9)
     prompt_process = FastSAMPrompt(input, everything_results, device=device)
 
     #ann = prompt_process.everything_prompt()
-    ann = prompt_process.box_prompt(bboxes=[largest_box])
-    #visualize_mask_with_vertices(ann)
+    ann = prompt_process.box_prompt(bboxes=[box])
+    if(len(ann))==0:
+        return mask_success, cropped_frame, (0, 0)
 
-    #vertices = extract_mask_vertices(ann)
+    binary_masks = create_binary_masks(ann[0])
 
-    #for obj_id, (rows, cols) in vertices.items():
-    #    print(f"Object ID {obj_id}:")
-    #    for row, col in zip(rows, cols):
-    #        print(f"  Vertex at row {row}, column {col}")
+    # Print the width and height of ann
+    ann_height, ann_width = ann[0].shape[:2]
+    print(f"ann dimensions: Width = {ann_width}, Height = {ann_height}")
+    #print(ann[0])
 
-    #ann = prompt_process.box_prompt(bboxes=[[1498.5, 2.1868, 1920.4, 132.91]])
 
-    binary_masks = create_binary_masks(ann)
-    visualize_binary_masks(binary_masks)
-
-    # Display the segmentation result
-    output_image_path = 'output_frame_tmp.jpg'
-
-    prompt_process.plot(annotations=ann, output_path=output_image_path,)
-
+    #output_image_path = 'output_frame_tmp.jpg'
+    #prompt_process.plot(annotations=ann, output_path=output_image_path,)
     # Read the output image and display it
-    segmented_frame = cv2.imread(output_image_path)
-    return segmented_frame
+    #segmented_frame = cv2.imread(output_image_path)
+
+    segmented_frame = apply_binary_masks_to_frame(cropped_frame, binary_masks)
+
+    # Find topmost and rightmost point in the segmented frame
+    topmost_rightmost_point = None
+    for i, binary_mask in enumerate(binary_masks):
+        # Find the non-zero points in the binary mask
+        points = np.argwhere(binary_mask > 0)
+        if len(points) > 0:
+            # Find the topmost points
+            topmost_points = points[points[:, 0] == np.min(points[:, 0])]
+            # Find the rightmost point among the topmost points
+            rightmost_point = topmost_points[np.argmax(topmost_points[:, 1])]
+            print(f"Topmost rightmost point in binary_mask[{i}]: {rightmost_point}")
+
+            # Translate point to coordinates in the original full frame
+            rightmost_point = (rightmost_point[1] + x_min, rightmost_point[0] + y_min)
+
+            # Update the topmost_rightmost_point if not set or if this one is further right or higher up
+            if (topmost_rightmost_point is None or
+                    rightmost_point[1] > topmost_rightmost_point[1] or
+                    (rightmost_point[1] == topmost_rightmost_point[1] and rightmost_point[0] < topmost_rightmost_point[
+                        0])):
+                topmost_rightmost_point = rightmost_point
+
+    if (topmost_rightmost_point is not None):
+        (x_full,y_full) = topmost_rightmost_point
+        ##################
+        x=x_full-x_min
+        y=y_full-y_min
+        mask_success=True
+        cv2.circle(segmented_frame, (x, y), 10, (255, 0, 0), -1)
+
+    #print("drawing circle on segmented frame at ", (x, y))
+
+    #visualize_binary_masks(binary_masks)
+    #print("before returning (x_full, y_full)", (x_full, y_full))
+    return mask_success, segmented_frame, (x_full, y_full)
 
 
 def create_binary_masks(segmentation_mask):
