@@ -473,7 +473,7 @@ def apply_binary_masks_to_frame(frame, binary_masks):
 # 1. enlarges box (mask is better)
 # 2. Create binary mask with ann[0] - Experiment what happens when ann has ann[1], ann[2] and so on - means multiple masks
 # 3.
-def process_frame_with_fastsam(full_frame, box, device='mps'):
+def process_frame_with_fastsam1(full_frame, box, device='mps'):
     print("box at beginning of fast sam", box)
     x1, y1, x2, y2 = map(int, box)
     mask_success = False
@@ -530,6 +530,7 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
                         0])):
                 topmost_rightmost_point = rightmost_point
 
+    print("box at midway of fast sam", box)
 
     if (topmost_rightmost_point is not None):
 
@@ -551,6 +552,77 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
 
     #visualize_binary_masks(binary_masks)
     #print("before returning (x_full, y_full)", (x_full, y_full))
+    return mask_success, segmented_frame, (x_full, y_full)
+
+
+def process_frame_with_fastsam(full_frame, box, device='mps'):
+    print("box at beginning of fast sam", box)
+
+    # Convert box coordinates to integers
+    x1, y1, x2, y2 = map(int, box)
+
+    mask_success = False
+    center_x = (x2 + x1) / 2
+    center_y = (y2 + y1) / 2
+
+    enlargement_factor_sam = 0.5
+
+    # Calculate bigger_box
+    x_min = int(center_x - (center_x - x1) * (1 + enlargement_factor_sam))
+    y_min = int(center_y - (center_y - y1) * (1 + enlargement_factor_sam))
+    x_max = int(center_x + (x2 - center_x) * (1 + enlargement_factor_sam))
+    y_max = int(center_y + (y2 - center_y) * (1 + enlargement_factor_sam))
+
+    # Crop full_frame using calculated coordinates
+    cropped_frame = full_frame[y_min:y_max, x_min:x_max]
+    input = Image.fromarray(cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB))
+
+    # Run FastSAM on the cropped frame
+    everything_results = fast_same_model(input, device=device, retina_masks=True, conf=0.2, iou=0.9)
+    prompt_process = FastSAMPrompt(input, everything_results, device=device)
+
+    # Use box_prompt to get annotations
+    ann = prompt_process.box_prompt(bboxes=[[x1, y1, x2, y2]])
+
+    if len(ann) >= 1:
+        print('MULTIPLE MASKS ', len(ann))
+    if len(ann) == 0:
+        return mask_success, cropped_frame, (-1, -1)
+
+    # Create binary masks and apply to cropped_frame
+    binary_masks = create_binary_masks(ann[0])
+    segmented_frame = apply_binary_masks_to_frame(cropped_frame, binary_masks)
+
+    # Find topmost and rightmost point in the segmented frame
+    topmost_rightmost_point = None
+    for i, binary_mask in enumerate(binary_masks):
+        points = np.argwhere(binary_mask > 0)
+        if len(points) > 0:
+            topmost_points = points[points[:, 0] == np.min(points[:, 0])]
+            rightmost_point = topmost_points[np.argmax(topmost_points[:, 1])]
+            rightmost_point = (rightmost_point[1] + x_min, rightmost_point[0] + y_min)
+
+            if (topmost_rightmost_point is None or
+                    rightmost_point[1] > topmost_rightmost_point[1] or
+                    (rightmost_point[1] == topmost_rightmost_point[1] and rightmost_point[0] < topmost_rightmost_point[
+                        0])):
+                topmost_rightmost_point = rightmost_point
+
+    print("box at midway of fast sam", box)
+
+    if topmost_rightmost_point is not None:
+        x_full, y_full = topmost_rightmost_point
+        x = x_full - x_min
+        y = y_full - y_min
+
+        if x1 <= x_full <= x2 and y1 <= y_full <= y2:
+            mask_success = True
+            cv2.circle(segmented_frame, (x, y), 10, (255, 0, 0), -1)
+        else:
+            return False, segmented_frame, (-1, -1)
+    else:
+        return False, segmented_frame, (-1, -1)
+
     return mask_success, segmented_frame, (x_full, y_full)
 
 
