@@ -31,6 +31,7 @@ perform_depth = 1
 DEBUG = False  # Set to True for debug mode, False for normal mode
 perform_owl = 1
 
+
 SHOW_OBJECT_DETECTION = False
 SHOW_DEPTH_FRAME_FULL = False
 SHOW_ANGLE_FRAME = False
@@ -63,7 +64,7 @@ def world_calibrate(cal_img):
 
 def capture_webcam_and_display(texts, videofile=None):
     # Open the video capture device (webcam 0)
-    speed=1#900
+    speed=10
     if videofile is not None:
         cap = cv2.VideoCapture(videofile)
     else:
@@ -95,6 +96,8 @@ def capture_webcam_and_display(texts, videofile=None):
         # Check for the 'q' key to quit the loop
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+
 
     # Release the video capture device and close all OpenCV windows
     cap.release()
@@ -174,23 +177,6 @@ def owl2_max_conf(frame, texts, conf):
     if max_conf_box is not None:
         # Draw the bounding box with the highest confidence score on the frame
         box = [int(b) for b in max_conf_box]
-        cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
-        cv2.putText(frame, f"{text[labels[0]]}: {round(max_conf_score, 3)}", (box[0], box[1] - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-        # Calculate center coordinates of the box
-        center_x = (box[0] + box[2]) // 2
-        center_y = (box[1] + box[3]) // 2
-
-        # Draw a red circle at the center of the box
-        cv2.circle(frame, (center_x, center_y), 10, (0, 0, 255), -1)
-
-        # Display center coordinates on the frame
-        cv2.putText(frame, f"Center: ({center_x}, {center_y})", (box[0], box[1] - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-        if SHOW_OBJECT_DETECTION:
-            cv2.imshow('Object Detection', frame)
 
     return max_conf_box
 
@@ -300,11 +286,12 @@ def mask_angle(frame, box, side):
 
 
 def find_matching_point(left_box, right_box, left_image, right_image):
-    print(left_box, right_box)
+
+
     box_size_diff_threshold=0.8
 
-    mask_success_left, left_image_sammed, left_point = process_frame_with_fastsam(left_image, left_box, device='mps')
-    mask_success_right, right_image_sammed, right_point = process_frame_with_fastsam(right_image, right_box, device='mps')
+    mask_success_left, left_image_sammed, left_point = process_frame_with_fastsam(left_image, left_box.copy(), device='mps')
+    mask_success_right, right_image_sammed, right_point = process_frame_with_fastsam(right_image, right_box.copy(), device='mps')
     new_height = min(left_image_sammed.shape[0], right_image_sammed.shape[0])
     # Resize both images to the new height while maintaining aspect ratio
     left_image_resized = cv2.resize(left_image_sammed, (
@@ -319,12 +306,20 @@ def find_matching_point(left_box, right_box, left_image, right_image):
     cv2.imshow('combined_masked_image', combined_image)
 
     if (mask_success_left is False or mask_success_right is False):
+        print("USING CENTER POINT")
         left_point = [int((left_box[0] + left_box[2]) / 2), int((left_box[1] + left_box[3]) / 2)]
         right_point = [int((right_box[0] + right_box[2]) / 2), int((right_box[1] + right_box[3]) / 2)]
 
-    print(left_point, right_point)
+    
     cv2.circle(left_image, left_point, 10, (255, 0, 0), -1)
     cv2.circle(right_image, right_point, 10, (255, 0, 0), -1)
+
+    left_box = [int(round(coord)) for coord in left_box]
+    right_box = [int(round(coord)) for coord in right_box]
+
+
+    cv2.rectangle(left_image, (left_box[0], left_box[1]), (left_box[2], left_box[3]), (0, 255, 0), 2)
+    cv2.rectangle(right_image, (right_box[0], right_box[1]), (right_box[2], right_box[3]), (0, 255, 0), 2)
 
     rejoined_image = np.concatenate((left_image, right_image), axis=1)
     cv2.imshow('rejoined_image', rejoined_image)
@@ -377,8 +372,10 @@ def read_image_and_display(frame, texts):
 
     #left_image, right_image=rectify_images(left_image, right_image, base_path, '')
 
-    left_box = owl2_max_conf(left_image.copy(), texts, conf)
-    right_box = owl2_max_conf(right_image.copy(), texts, conf)
+    left_box = owl2_max_conf(left_image, texts, conf)
+    right_box = owl2_max_conf(right_image, texts, conf)
+#    left_box = owl2_max_conf(left_image.copy(), texts, conf)
+#    right_box = owl2_max_conf(right_image.copy(), texts, conf)
 
     if left_box is not None and right_box is not None:
         #mask_angle(left_image, left_box,'left')
@@ -477,21 +474,23 @@ def apply_binary_masks_to_frame(frame, binary_masks):
 # 2. Create binary mask with ann[0] - Experiment what happens when ann has ann[1], ann[2] and so on - means multiple masks
 # 3.
 def process_frame_with_fastsam(full_frame, box, device='mps'):
+    print(box)
     mask_success = False
     center_x = (box[2] + box[0]) / 2
     center_y = (box[3] + box[1]) / 2
 
-    enlargement_factor = 0.66
+    enlargement_factor_sam = 0.5
+
     bigger_box = [
-        center_x - (center_x - box[0]) * (1 + enlargement_factor),  # x_min
-        center_y - (center_y - box[1]) * (1 + enlargement_factor),  # y_min
-        center_x + (box[2] - center_x) * (1 + enlargement_factor),  # x_max
-        center_y + (box[3] - center_y) * (1 + enlargement_factor)  # y_max
+        center_x - (center_x - box[0]) * (1 + enlargement_factor_sam),  # x_min
+        center_y - (center_y - box[1]) * (1 + enlargement_factor_sam),  # y_min
+        center_x + (box[2] - center_x) * (1 + enlargement_factor_sam),  # x_max
+        center_y + (box[3] - center_y) * (1 + enlargement_factor_sam)  # y_max
     ]
 
-    box = bigger_box
+    #box = bigger_box
 
-    x_min, y_min, x_max, y_max = map(int, box)
+    x_min, y_min, x_max, y_max = map(int, bigger_box)
     cropped_frame = full_frame[y_min:y_max, x_min:x_max]
     input = Image.fromarray(cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB))
 
@@ -501,14 +500,15 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
 
     #ann = prompt_process.everything_prompt()
     ann = prompt_process.box_prompt(bboxes=[box])
+    if (len(ann)) >= 1:
+        print('MULTIPLE MASKS ', len(ann))
     if(len(ann))==0:
-        return mask_success, cropped_frame, (0, 0)
+        return mask_success, cropped_frame, (-1, -1)
 
     binary_masks = create_binary_masks(ann[0])
 
     # Print the width and height of ann
     ann_height, ann_width = ann[0].shape[:2]
-    print(f"ann dimensions: Width = {ann_width}, Height = {ann_height}")
     #print(ann[0])
 
 
@@ -529,7 +529,6 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
             topmost_points = points[points[:, 0] == np.min(points[:, 0])]
             # Find the rightmost point among the topmost points
             rightmost_point = topmost_points[np.argmax(topmost_points[:, 1])]
-            print(f"Topmost rightmost point in binary_mask[{i}]: {rightmost_point}")
 
             # Translate point to coordinates in the original full frame
             rightmost_point = (rightmost_point[1] + x_min, rightmost_point[0] + y_min)
@@ -548,8 +547,11 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
         y=y_full-y_min
         mask_success=True
         cv2.circle(segmented_frame, (x, y), 10, (255, 0, 0), -1)
+    else:
+        (x_full, y_full) = (0,0)
 
-    #print("drawing circle on segmented frame at ", (x, y))
+
+        #print("drawing circle on segmented frame at ", (x, y))
 
     #visualize_binary_masks(binary_masks)
     #print("before returning (x_full, y_full)", (x_full, y_full))
