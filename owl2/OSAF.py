@@ -310,7 +310,7 @@ def find_matching_point(left_box, right_box, left_image, right_image):
         left_point = [int((left_box[0] + left_box[2]) / 2), int((left_box[1] + left_box[3]) / 2)]
         right_point = [int((right_box[0] + right_box[2]) / 2), int((right_box[1] + right_box[3]) / 2)]
 
-    
+
     cv2.circle(left_image, left_point, 10, (255, 0, 0), -1)
     cv2.circle(right_image, right_point, 10, (255, 0, 0), -1)
 
@@ -474,7 +474,8 @@ def apply_binary_masks_to_frame(frame, binary_masks):
 # 2. Create binary mask with ann[0] - Experiment what happens when ann has ann[1], ann[2] and so on - means multiple masks
 # 3.
 def process_frame_with_fastsam(full_frame, box, device='mps'):
-    print(box)
+    print("box at beginning of fast sam", box)
+    x1, y1, x2, y2 = map(int, box)
     mask_success = False
     center_x = (box[2] + box[0]) / 2
     center_y = (box[3] + box[1]) / 2
@@ -495,7 +496,7 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
     input = Image.fromarray(cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB))
 
     # Run FastSAM on the captured frame
-    everything_results = fast_same_model(input, device=device, retina_masks=True, conf=0.1, iou=0.9)
+    everything_results = fast_same_model(input, device=device, retina_masks=True, conf=0.2, iou=0.9)
     prompt_process = FastSAMPrompt(input, everything_results, device=device)
 
     #ann = prompt_process.everything_prompt()
@@ -506,16 +507,6 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
         return mask_success, cropped_frame, (-1, -1)
 
     binary_masks = create_binary_masks(ann[0])
-
-    # Print the width and height of ann
-    ann_height, ann_width = ann[0].shape[:2]
-    #print(ann[0])
-
-
-    #output_image_path = 'output_frame_tmp.jpg'
-    #prompt_process.plot(annotations=ann, output_path=output_image_path,)
-    # Read the output image and display it
-    #segmented_frame = cv2.imread(output_image_path)
 
     segmented_frame = apply_binary_masks_to_frame(cropped_frame, binary_masks)
 
@@ -529,7 +520,6 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
             topmost_points = points[points[:, 0] == np.min(points[:, 0])]
             # Find the rightmost point among the topmost points
             rightmost_point = topmost_points[np.argmax(topmost_points[:, 1])]
-
             # Translate point to coordinates in the original full frame
             rightmost_point = (rightmost_point[1] + x_min, rightmost_point[0] + y_min)
 
@@ -540,15 +530,21 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
                         0])):
                 topmost_rightmost_point = rightmost_point
 
+
     if (topmost_rightmost_point is not None):
+
         (x_full,y_full) = topmost_rightmost_point
         ##################
         x=x_full-x_min
         y=y_full-y_min
-        mask_success=True
-        cv2.circle(segmented_frame, (x, y), 10, (255, 0, 0), -1)
+
+        if(x1 <= x_full <= x2 and y1 <= y_full <= y2):
+            mask_success=True
+            cv2.circle(segmented_frame, (x, y), 10, (255, 0, 0), -1)
+        else:
+            return False, segmented_frame, (-1, -1)
     else:
-        (x_full, y_full) = (0,0)
+        return False, segmented_frame, (-1, -1)
 
 
         #print("drawing circle on segmented frame at ", (x, y))
