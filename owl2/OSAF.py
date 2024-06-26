@@ -64,7 +64,7 @@ def world_calibrate(cal_img):
 
 def capture_webcam_and_display(texts, videofile=None):
     # Open the video capture device (webcam 0)
-    speed=10
+    speed=100
     if videofile is not None:
         cap = cv2.VideoCapture(videofile)
     else:
@@ -492,6 +492,11 @@ def process_frame_with_fastsam1(full_frame, box, device='mps'):
     #box = bigger_box
 
     x_min, y_min, x_max, y_max = map(int, bigger_box)
+    x_min = max(0, x_min)
+    y_min = max(0, y_min)
+    x_max = min(full_frame.shape[1], x_max)
+    y_max = min(full_frame.shape[0], y_max)
+
     cropped_frame = full_frame[y_min:y_max, x_min:x_max]
     input = Image.fromarray(cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB))
 
@@ -573,8 +578,14 @@ def process_frame_with_fastsam(full_frame, box, device='mps'):
     x_max = int(center_x + (x2 - center_x) * (1 + enlargement_factor_sam))
     y_max = int(center_y + (y2 - center_y) * (1 + enlargement_factor_sam))
 
+    x_min = max(0, x_min)
+    y_min = max(0, y_min)
+    x_max = min(full_frame.shape[1], x_max)
+    y_max = min(full_frame.shape[0], y_max)
+
     # Crop full_frame using calculated coordinates
     cropped_frame = full_frame[y_min:y_max, x_min:x_max]
+    print('y_min:y_max, x_min:x_max',y_min,y_max, x_min,x_max)
     input = Image.fromarray(cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB))
 
     # Run FastSAM on the cropped frame
@@ -669,7 +680,10 @@ if __name__ == "__main__":
     #texts = [["a green block", "a green square"]]
 
     #texts = [["face", "a human face"]];capture_webcam_and_display(texts)
-    texts = [["a green wooden block", "a green cube"]];capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid_green_3s.mov")
+
+    texts = [["a face", "a red cube", "a red block", "hands"]];
+    capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid2.mov")
+    capture_webcam_and_display(texts, "distance-002.mov")
     #texts = [["a green wooden block"]];
     #capture_webcam_and_display(texts, "/Users/ms/Downloads/stevid_green.mov")
     #capture_webcam_and_display(texts, 0)
