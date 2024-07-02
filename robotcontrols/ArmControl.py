@@ -37,32 +37,21 @@ def grip_object(x, y, z, width):
 def release_object():
     Board.setBusServoPulse(1, servo_release, 500)
     time.sleep(1)
+    print("Object released")
 
 def rotate_gripper(angle):
     Board.setBusServoPulse(2, angle, 500)
     time.sleep(1)
 
-def approach_gripper():
-    Board.setBusServoPulse(3, m2_values[1], 1000)
-
-def update_approach_angle(value):
+def approach_gripper(value):
     global m2_values
     approach_grip_angle = round(float(value))
-    m2_values = [min_approach_angle.get(), approach_grip_angle, max_approach_angle.get()]
+    m2_values[1] = min(max(approach_grip_angle, m2_values[0]), m2_values[2])
     print('set m2_values', *m2_values)
-    update_approach_label()
-
-def update_approach_label():
-    angle = approach_grip_angle
-    min_angle = min_approach_angle.get()
-    max_angle = max_approach_angle.get()
-    if angle < min_angle:
-        angle = min_angle
-    elif angle > max_angle:
-        angle = max_angle
-    print(angle)
+    Board.setBusServoPulse(3, m2_values[1], 1000)
 
 # Example usage:
 move_arm(10, 10, 5)
 grip_object(10, 10, 5, 10)
 rotate_gripper(90)
+approach_gripper(30)  # Example call to approach_gripper with a value
