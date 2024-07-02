@@ -21,4 +21,5 @@ Backlog OSAF
 1. Integrate get angle on masked image
 2. Based on angle, find object size - length and width and possibly height
 3. In case of multiple masks, pick up the mask inside the box.
-4. Filter mask to keep only inside box mask (may get solved with #3)
+4
+. Filter mask to keep only inside box mask (may get solved with #3)
