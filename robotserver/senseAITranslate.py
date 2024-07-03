@@ -12,7 +12,9 @@ import json
 import importlib
 import cam_to_arm
 
-
+import warnings
+warnings.filterwarnings("ignore")
+#warnings.filterwarnings("ignore", category=UserWarning, message="'has_mps' is deprecated")
 
 command_id=0
 
@@ -415,8 +417,14 @@ def read_image_and_display(frame, texts):
             global command_id
             #send_to_redis(command_id, (print(f"Spatial Distance from{pointRef} : {spatial_distance:.2f} units")))
             importlib.reload(cam_to_arm)
-            ArmWorldPoint = cam_to_arm.cworld_to_aworld(point3D)
+            ArmWorldPoint = cam_to_arm.cworld_to_aworld((point3D[0],point3D[1]))
             print('point3D, ArmWorldPoint : ', point3D, ArmWorldPoint)
+            t = input("Choose (s)kip, (e)xecute, (q)uit: ")
+            if t=='q':
+                exit()
+            if t=='e':
+                print("(ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2))", (ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2)))
+                move_arm(ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2))
             #move_arm(point3D[0],point3D[1], point3D[2])
             command_id += 1
         else:
@@ -640,7 +648,7 @@ if __name__ == "__main__":
     load_model_owl()
 
 
-    world_calibrate('/Users/ms/code/random/saved/ref.jpg')
+    world_calibrate('/Users/ms/code/random/new_save/ref.jpg')
     r = redis.Redis(host='localhost', port=6379, db=0)
     command_id=0
     conf = 0.2
@@ -655,29 +663,29 @@ if __name__ == "__main__":
     texts = [["a green circle", "a round green surface"]]
 
     img = cv2.imread("/Users/ms/code/random/new_save/1.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("1.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("1.jpg")
 
     img = cv2.imread("/Users/ms/code/random/new_save/2.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("2.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("2.jpg")
 
     img = cv2.imread("/Users/ms/code/random/new_save/3.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("3.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("3.jpg")
 
     img = cv2.imread("/Users/ms/code/random/new_save/4.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("4.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("4.jpg")
 
     img = cv2.imread("/Users/ms/code/random/new_save/5.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("5.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("5.jpg")
 
     img = cv2.imread("/Users/ms/code/random/new_save/6.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("6.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("6.jpg")
 
     img = cv2.imread("/Users/ms/code/random/new_save/7.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("7.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("7.jpg")
 
     img = cv2.imread("/Users/ms/code/random/new_save/8.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("8.jpg")
+    read_image_and_display(img, texts)#;cv2.waitKey(0);print("8.jpg")
 
-    img = cv2.imread("/Users/ms/code/random/new_save/9.jpg")
-    read_image_and_display(img, texts);cv2.waitKey(0);print("9.jpg")
+ #   img = cv2.imread("/Users/ms/code/random/new_save/9.jpg")
+ #   read_image_and_display(img, texts);cv2.waitKey(0);print("9.jpg")
 
