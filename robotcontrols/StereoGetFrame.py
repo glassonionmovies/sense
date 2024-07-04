@@ -4,7 +4,12 @@ import threading
 
 app = Flask(__name__)
 
-cap = cv2.VideoCapture(0)  # Using webcam device ID 0
+# Initialize VideoCapture with webcam device ID 0
+cap = cv2.VideoCapture(0)
+
+# Set the resolution to 2560x720
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 current_frame = None
 lock = threading.Lock()
@@ -22,7 +27,8 @@ def read_frames():
 def get_frame():
     with lock:
         if current_frame is not None:
-            ret, buffer = cv2.imencode('.jpg', current_frame)
+            resized_frame = cv2.resize(current_frame, (2560, 720))
+            ret, buffer = cv2.imencode('.jpg', resized_frame)
             frame = buffer.tobytes()
             return frame
         else:
@@ -55,4 +61,4 @@ if __name__ == "__main__":
     thread = threading.Thread(target=read_frames)
     thread.daemon = True
     thread.start()
-    app.run(host='192.168.1.129', port=5002)
+    app.run(host='0.0.0.0', port=5002)
