@@ -31,8 +31,8 @@ def get_frame():
         else:
             return None
 
-@app.route('/video_feed')
-def video_feed():
+@app.route('/frame_feed')
+def frame_feed():
     return Response(get_frame(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
