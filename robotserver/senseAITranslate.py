@@ -318,7 +318,7 @@ def find_matching_point(left_box, right_box, left_image, right_image):
 
     # Concatenate images horizontally
     combined_image = np.concatenate((left_image_resized, right_image_resized), axis=1)
-
+    cv2.waitKey(1)
     # Display the concatenated image using OpenCV
     cv2.imshow('combined_masked_image', combined_image)
 
@@ -419,14 +419,24 @@ def read_image_and_display(frame, texts):
             importlib.reload(cam_to_arm)
             ArmWorldPoint = cam_to_arm.cworld_to_aworld((point3D[0],point3D[1]))
             print('point3D, ArmWorldPoint : ', point3D, ArmWorldPoint)
-            t = input("Choose (s)kip, (e)xecute, (q)uit: ")
-            if t=='q':
-                exit()
-            if t=='e':
-                print("(ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2))", (ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2)))
-                move_arm(ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2))
-            #move_arm(point3D[0],point3D[1], point3D[2])
-            command_id += 1
+            p_val_def=[-90, -90, 0]
+            CalibWorldPoint=[0,6,3]
+
+            print("(ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2))", ArmWorldPoint[0], ArmWorldPoint[1],
+                  max(point3D[2], 2), p_val_def)
+
+            if ask_user_input:
+                t = input("Choose (s)kip, (e)xecute, (p)osition (q)uit: ")
+                if t=='q':
+                    exit()
+                if t=='p':
+                    move_arm(CalibWorldPoint[0], CalibWorldPoint[1], max(CalibWorldPoint[2],2), p_val_def)
+                    command_id += 1
+                if t=='e':
+                    move_arm(ArmWorldPoint[0], ArmWorldPoint[1], max(point3D[2],2), p_val_def)
+                    command_id += 1
+
+                #move_arm(point3D[0],point3D[1], point3D[2])
         else:
             print("Cannot detect depth, because object sizes differs by more than threshold")
 
@@ -621,8 +631,8 @@ def grip_object(x, y, z, width):
     command_message={"id": command_id, "command": "grip_object", "x": x, "y": y, "z": z, "width": width}
     send_to_redis(command_message)
 
-def move_arm(x, y, z):
-    command_message={"id": command_id, "command": "move_arm", "x": x, "y": y, "z": z}
+def move_arm(x, y, z, p_val):
+    command_message={"id": command_id, "command": "move_arm", "x": x, "y": y, "z": z, "p_val": p_val}
     send_to_redis(command_message)
 def release_object():
     command_message={"id": command_id, "command": "release_object"}
@@ -654,12 +664,30 @@ if __name__ == "__main__":
     conf = 0.2
     box_size_diff_threshold = 0.99
     return_center_co_only=1
-    stream_url = 'http://192.168.1.38:5001/video_feed'
-    stream_url='/Users/ms/Downloads/stevid_green_3s.mov'
+    stream_url = 'http://192.168.1.129:5002/frame_feed'
+    #stream_url='/Users/ms/Downloads/stevid_green_3s.mov'
 
 
-#    texts = [["corner of a cube", "a green cube"]]
-#    capture_webcam_and_display(texts, stream_url)
+    texts = [["corner of a cube", "a green cube"]]
+
+
+    #capture_webcam_and_display(texts, stream_url)
+
+    ask_user_input=False
+    while True:
+        cap = cv2.VideoCapture(stream_url)
+        ret, frame = cap.read()
+        read_image_and_display(frame, texts)
+
+
+
+
+
+
+
+
+    exit()
+
     texts = [["a green circle", "a round green surface"]]
 
     img = cv2.imread("/Users/ms/code/random/new_save/1.jpg")
