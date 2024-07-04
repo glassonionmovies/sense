@@ -31,9 +31,31 @@ def get_frame():
         else:
             return None
 
+def generate_full_feed():
+    local_cap = cv2.VideoCapture(video_file_path)
+    while True:
+        success, frame = local_cap.read()
+        if not success:
+            local_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Restart the video
+            continue
+        with lock:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        cv2.waitKey(1)
+
 @app.route('/frame_feed')
 def frame_feed():
-    return Response(get_frame(),
+    frame = get_frame()
+    if frame:
+        return Response(frame, mimetype='multipart/x-mixed-replace; boundary=frame')
+    else:
+        return Response(status=204)
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_full_feed(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == "__main__":
