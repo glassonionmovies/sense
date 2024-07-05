@@ -142,22 +142,18 @@ while True:
     elif x == 'l':
         print("move left")
         global current_speed_p1, current_speed_p2
-        original_speed_p1 = current_speed_p1
-        original_speed_p2 = current_speed_p2
 
         # Adjust speeds
-        new_speed_p1 = original_speed_p1 - (original_speed_p1 * t_sharp / 100)
-        new_speed_p2 = original_speed_p2 + (original_speed_p2 * t_sharp / 100)
+        new_speed_p1 = current_speed_p1 - (current_speed_p1 * t_sharp / 100)
+        new_speed_p2 = current_speed_p2 + (current_speed_p2 * t_sharp / 100)
         p1.ChangeDutyCycle(new_speed_p1)
         p2.ChangeDutyCycle(new_speed_p2)
 
         sleep(t_duration)  # Use configured duration
 
         # Restore original speeds
-        p1.ChangeDutyCycle(original_speed_p1)
-        p2.ChangeDutyCycle(original_speed_p2)
-        current_speed_p1 = original_speed_p1
-        current_speed_p2 = original_speed_p2
+        p1.ChangeDutyCycle(current_speed_p1)
+        p2.ChangeDutyCycle(current_speed_p2)
         x = 'z'
 
     elif x == 'r':
