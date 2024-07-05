@@ -51,6 +51,27 @@ print("l - move left, r - move right")
 print("e - exit")
 print("\n")
 
+
+# Function to move left
+def move_left():
+    global current_speed_p1, current_speed_p2
+
+    # Adjust speeds
+    new_speed_p1 = current_speed_p1 - (current_speed_p1 * t_sharp / 100)
+    new_speed_p2 = current_speed_p2 + (current_speed_p2 * t_sharp / 100)
+    p1.ChangeDutyCycle(new_speed_p1)
+    p2.ChangeDutyCycle(new_speed_p2)
+
+    sleep(t_duration)  # Use configured duration
+
+    # Restore original speeds
+    p1.ChangeDutyCycle(current_speed_p1)
+    p2.ChangeDutyCycle(current_speed_p2)
+    current_speed_p1 = 50  # Reset to default medium speed
+    current_speed_p2 = 50
+
+
+# Main loop for user input
 while True:
     x = input("Enter command: ")
 
@@ -141,19 +162,7 @@ while True:
 
     elif x == 'l':
         print("move left")
-        global current_speed_p1, current_speed_p2
-
-        # Adjust speeds
-        new_speed_p1 = current_speed_p1 - (current_speed_p1 * t_sharp / 100)
-        new_speed_p2 = current_speed_p2 + (current_speed_p2 * t_sharp / 100)
-        p1.ChangeDutyCycle(new_speed_p1)
-        p2.ChangeDutyCycle(new_speed_p2)
-
-        sleep(t_duration)  # Use configured duration
-
-        # Restore original speeds
-        p1.ChangeDutyCycle(current_speed_p1)
-        p2.ChangeDutyCycle(current_speed_p2)
+        move_left()
         x = 'z'
 
     elif x == 'r':
