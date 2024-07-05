@@ -40,7 +40,7 @@ print("Default speed & direction of both motors: Medium & Forward.....")
 print("Available commands:")
 print("r - run both motors, s - stop both motors")
 print("f - forward both motors, b - backward both motors")
-print("l - low speed, m - medium speed, h - high speed")
+print("sl - low speed, m - medium speed, h - high speed")
 print("L - turn left, R - turn right,")
 print("l - move left, r - move right,")
 print("F - move forward, B - move backward, e - exit")
@@ -83,7 +83,7 @@ while (1):
         temp1 = 0
         x = 'z'
 
-    elif x == 'l':
+    elif x == 'sl':
         print("low speed")
         p1.ChangeDutyCycle(25)
         x = 'z'
