@@ -1,5 +1,7 @@
-import RPi.GPIO as GPIO
-from time import sleep
+# motor_control.py
+RPi.GPIO as GPIO
+
+from time import sleep, time
 
 # Define GPIO pins for motor 1 (right motor)
 in1 = 22
@@ -12,7 +14,7 @@ in4 = 23
 en2 = 25
 
 # Default duration for turn and move left/right
-t_duration = 1.2
+t_duration = 0.8
 t_sharp = 50  # Percentage decrease/increase in motor speeds
 
 # Initialize GPIO
@@ -36,104 +38,123 @@ GPIO.output(in4, GPIO.LOW)
 p2 = GPIO.PWM(en2, 1000)
 p2.start(50)  # Default to medium speed (50% duty cycle)
 
-# Global variables to track current speeds
-current_speed_p1 = 50
-current_speed_p2 = 50
+# Global variables to track original speeds
+original_speed_p1 = 50
+original_speed_p2 = 50
+
+# List to track motor activity
+motor_activity = []
+unique_id = 0
+last_timestamp = time()
+
+# Variables to track total rotations
+total_rotation_left = 0
+total_rotation_right = 0
+direction = 1
 
 print("\n")
 print("Default speed & direction of both motors: Medium & Forward.....")
 print("Available commands:")
-print("f - forward both motors, b - backward both motors")
-print("sl - low speed, sm - medium speed, sh - high speed, su - ultra speed")
+print("f [speed] - forward both motors, b [speed] - backward both motors")
 print("L - turn left, R - turn right")
 print("l - move left, r - move right")
 print("s - stop all motors")
 print("e - exit")
 print("\n")
 
+# Function to log motor activity
+def log_motor_activity(left_speed, right_speed):
+    global unique_id, last_timestamp, total_rotation_left, total_rotation_right, direction
+
+    current_timestamp = time()
+    elapsed_time = current_timestamp - last_timestamp
+
+    left_rotation = direction * left_speed * elapsed_time
+    right_rotation = direction * right_speed * elapsed_time
+
+    total_rotation_left += left_rotation
+    total_rotation_right += right_rotation
+
+    motor_activity.append([unique_id, current_timestamp, left_speed, right_speed, elapsed_time])
+    unique_id += 1
+    last_timestamp = current_timestamp
+    print(motor_activity)
 
 # Function to move left
 def move_left():
-    global current_speed_p1, current_speed_p2
+    global original_speed_p1, original_speed_p2
+
+    log_motor_activity(original_speed_p2, original_speed_p1)
 
     # Adjust speeds
-    new_speed_p1 = max(0, current_speed_p1 - (current_speed_p1 * t_sharp / 100))
-    new_speed_p2 = min(100, current_speed_p2 + (current_speed_p2 * t_sharp / 100))
+    new_speed_p1 = max(0, original_speed_p1 - (original_speed_p1 * t_sharp / 100))
+    new_speed_p2 = min(100, original_speed_p2 + (original_speed_p2 * t_sharp / 100))
     p1.ChangeDutyCycle(new_speed_p1)
     p2.ChangeDutyCycle(new_speed_p2)
 
     sleep(t_duration)  # Use configured duration
-
+    log_motor_activity(new_speed_p1, new_speed_p2)
     # Restore original speeds
-    p1.ChangeDutyCycle(current_speed_p1)
-    p2.ChangeDutyCycle(current_speed_p2)
+    p1.ChangeDutyCycle(original_speed_p1)
+    p2.ChangeDutyCycle(original_speed_p2)
+    log_motor_activity(original_speed_p2, original_speed_p1)
 
-
+# Function to move right
 def move_right():
-    global current_speed_p1, current_speed_p2
+    global original_speed_p1, original_speed_p2
+
+    log_motor_activity(original_speed_p1, original_speed_p2)
 
     # Adjust speeds
-    new_speed_p1 = min(100, current_speed_p1 + (current_speed_p1 * t_sharp / 100))
-    new_speed_p2 = max(0, current_speed_p2 - (current_speed_p2 * t_sharp / 100))
+    new_speed_p1 = min(100, original_speed_p1 + (original_speed_p1 * t_sharp / 100))
+    new_speed_p2 = max(0, original_speed_p2 - (original_speed_p2 * t_sharp / 100))
     p1.ChangeDutyCycle(new_speed_p1)
     p2.ChangeDutyCycle(new_speed_p2)
+    log_motor_activity(new_speed_p1, new_speed_p2)
 
     sleep(t_duration)  # Use configured duration
-
+    log_motor_activity(original_speed_p1, original_speed_p2)
     # Restore original speeds
-    p1.ChangeDutyCycle(current_speed_p1)
-    p2.ChangeDutyCycle(current_speed_p2)
-
+    p1.ChangeDutyCycle(original_speed_p1)
+    p2.ChangeDutyCycle(original_speed_p2)
+    log_motor_activity(original_speed_p1, original_speed_p1)
 
 # Main loop for user input
-while True:
-    x = input("Enter command: ")
+running = True
+while running:
+    x = input("Enter command: ").split()
 
-    # Motor control
-    if x == 'f':
-        print("move forward")
+    if x[0] == 'f':
+        direction = 1
+        speed = int(x[1]) if len(x) > 1 else original_speed_p1
+        print(f"move forward at speed {speed}")
+        log_motor_activity(speed, speed)
+        p1.ChangeDutyCycle(speed)
+        p2.ChangeDutyCycle(speed)
+        original_speed_p1 = speed
+        original_speed_p2 = speed
         GPIO.output(in1, GPIO.HIGH)
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.HIGH)
         GPIO.output(in4, GPIO.LOW)
 
-    elif x == 'b':
-        print("move backward")
+    elif x[0] == 'b':
+        direction = -1
+        speed = int(x[1]) if len(x) > 1 else original_speed_p1
+        print(f"move backward at speed {speed}")
+        log_motor_activity(speed, speed)
+        p1.ChangeDutyCycle(speed)
+        p2.ChangeDutyCycle(speed)
+        original_speed_p1 = speed
+        original_speed_p2 = speed
         GPIO.output(in1, GPIO.LOW)
         GPIO.output(in2, GPIO.HIGH)
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.HIGH)
 
-    elif x == 'sl':
-        print("low speed")
-        p1.ChangeDutyCycle(25)
-        p2.ChangeDutyCycle(25)
-        current_speed_p1 = 25
-        current_speed_p2 = 25
-
-    elif x == 'sm':
-        print("medium speed")
-        p1.ChangeDutyCycle(50)
-        p2.ChangeDutyCycle(50)
-        current_speed_p1 = 50
-        current_speed_p2 = 50
-
-    elif x == 'sh':
-        print("high speed")
-        p1.ChangeDutyCycle(75)
-        p2.ChangeDutyCycle(75)
-        current_speed_p1 = 75
-        current_speed_p2 = 75
-
-    elif x == 'su':
-        print("ultra speed")
-        p1.ChangeDutyCycle(100)
-        p2.ChangeDutyCycle(100)
-        current_speed_p1 = 100
-        current_speed_p2 = 100
-
-    elif x == 'L':
+    elif x[0] == 'L':
         print("turn left")
+        log_motor_activity(original_speed_p2, original_speed_p1)
         GPIO.output(in1, GPIO.LOW)
         GPIO.output(in2, GPIO.HIGH)
         GPIO.output(in3, GPIO.HIGH)
@@ -144,8 +165,9 @@ while True:
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.LOW)
 
-    elif x == 'R':
+    elif x[0] == 'R':
         print("turn right")
+        log_motor_activity(original_speed_p1, original_speed_p2)
         GPIO.output(in1, GPIO.HIGH)
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.LOW)
@@ -156,25 +178,30 @@ while True:
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.LOW)
 
-    elif x == 'l':
+    elif x[0] == 'l':
         print("move left")
         move_left()
 
-    elif x == 'r':
+    elif x[0] == 'r':
         print("move right")
         move_right()
 
-    elif x == 's':
+    elif x[0] == 's':
         print("stop all motors")
+        log_motor_activity(0, 0)
         GPIO.output(in1, GPIO.LOW)
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.LOW)
 
-    elif x == 'e':
+    elif x[0] == 'e':
+        log_motor_activity(0, 0)
         GPIO.cleanup()
         print("Exiting...")
-        break
+        running = False
+
+        print(f"Total rotation for left motor: {total_rotation_left}")
+        print(f"Total rotation for right motor: {total_rotation_right}")
 
     else:
         print("<<<  wrong data  >>>")
