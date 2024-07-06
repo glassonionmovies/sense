@@ -70,6 +70,7 @@ def move_left():
     current_speed_p1 = 50  # Reset to default medium speed
     current_speed_p2 = 50
 
+##comment
 def move_right():
     global current_speed_p1, current_speed_p2
 
