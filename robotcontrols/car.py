@@ -13,7 +13,7 @@ en2 = 17
 
 # Default duration for turn and move left/right
 t_duration = 1.2
-t_sharp = 10  # Percentage decrease/increase in motor speeds
+t_sharp = 50  # Percentage decrease/increase in motor speeds
 
 # Initialize GPIO
 GPIO.setmode(GPIO.BCM)
@@ -59,6 +59,23 @@ def move_left():
     # Adjust speeds
     new_speed_p1 = current_speed_p1 - (current_speed_p1 * t_sharp / 100)
     new_speed_p2 = current_speed_p2 + (current_speed_p2 * t_sharp / 100)
+    p1.ChangeDutyCycle(new_speed_p1)
+    p2.ChangeDutyCycle(new_speed_p2)
+
+    sleep(t_duration)  # Use configured duration
+
+    # Restore original speeds
+    p1.ChangeDutyCycle(current_speed_p1)
+    p2.ChangeDutyCycle(current_speed_p2)
+    current_speed_p1 = 50  # Reset to default medium speed
+    current_speed_p2 = 50
+
+def move_right():
+    global current_speed_p1, current_speed_p2
+
+    # Adjust speeds
+    new_speed_p1 = current_speed_p1 + (current_speed_p1 * t_sharp / 100)
+    new_speed_p2 = current_speed_p2 - (current_speed_p2 * t_sharp / 100)
     p1.ChangeDutyCycle(new_speed_p1)
     p2.ChangeDutyCycle(new_speed_p2)
 
@@ -160,6 +177,8 @@ while True:
         GPIO.output(in4, GPIO.LOW)
         x = 'z'
 
+
+
     elif x == 'l':
         print("move left")
         move_left()
@@ -168,6 +187,7 @@ while True:
     elif x == 'r':
         print("move right")
         # Similar logic as 'l', adjust speeds accordingly
+        move_right()
         x = 'z'
 
     elif x == 'e':
