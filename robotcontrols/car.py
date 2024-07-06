@@ -47,6 +47,7 @@ print("f - forward both motors, b - backward both motors")
 print("sl - low speed, sm - medium speed, sh - high speed, su - ultra speed")
 print("L - turn left, R - turn right")
 print("l - move left, r - move right")
+print("s - stop all motors")
 print("e - exit")
 print("\n")
 
@@ -56,8 +57,8 @@ def move_left():
     global current_speed_p1, current_speed_p2
 
     # Adjust speeds
-    new_speed_p1 = current_speed_p1 - (current_speed_p1 * t_sharp / 100)
-    new_speed_p2 = current_speed_p2 + (current_speed_p2 * t_sharp / 100)
+    new_speed_p1 = max(0, current_speed_p1 - (current_speed_p1 * t_sharp / 100))
+    new_speed_p2 = min(100, current_speed_p2 + (current_speed_p2 * t_sharp / 100))
     p1.ChangeDutyCycle(new_speed_p1)
     p2.ChangeDutyCycle(new_speed_p2)
 
@@ -72,8 +73,8 @@ def move_right():
     global current_speed_p1, current_speed_p2
 
     # Adjust speeds
-    new_speed_p1 = current_speed_p1 + (current_speed_p1 * t_sharp / 100)
-    new_speed_p2 = current_speed_p2 - (current_speed_p2 * t_sharp / 100)
+    new_speed_p1 = min(100, current_speed_p1 + (current_speed_p1 * t_sharp / 100))
+    new_speed_p2 = max(0, current_speed_p2 - (current_speed_p2 * t_sharp / 100))
     p1.ChangeDutyCycle(new_speed_p1)
     p2.ChangeDutyCycle(new_speed_p2)
 
@@ -95,7 +96,6 @@ while True:
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.HIGH)
         GPIO.output(in4, GPIO.LOW)
-        x = 'z'
 
     elif x == 'b':
         print("move backward")
@@ -103,7 +103,6 @@ while True:
         GPIO.output(in2, GPIO.HIGH)
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.HIGH)
-        x = 'z'
 
     elif x == 'sl':
         print("low speed")
@@ -111,7 +110,6 @@ while True:
         p2.ChangeDutyCycle(25)
         current_speed_p1 = 25
         current_speed_p2 = 25
-        x = 'z'
 
     elif x == 'sm':
         print("medium speed")
@@ -119,7 +117,6 @@ while True:
         p2.ChangeDutyCycle(50)
         current_speed_p1 = 50
         current_speed_p2 = 50
-        x = 'z'
 
     elif x == 'sh':
         print("high speed")
@@ -127,7 +124,6 @@ while True:
         p2.ChangeDutyCycle(75)
         current_speed_p1 = 75
         current_speed_p2 = 75
-        x = 'z'
 
     elif x == 'su':
         print("ultra speed")
@@ -135,9 +131,7 @@ while True:
         p2.ChangeDutyCycle(100)
         current_speed_p1 = 100
         current_speed_p2 = 100
-        x = 'z'
 
-    # Additional commands for specific movements
     elif x == 'L':
         print("turn left")
         GPIO.output(in1, GPIO.LOW)
@@ -149,7 +143,6 @@ while True:
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.LOW)
-        x = 'z'
 
     elif x == 'R':
         print("turn right")
@@ -162,17 +155,21 @@ while True:
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.LOW)
-        x = 'z'
 
     elif x == 'l':
         print("move left")
         move_left()
-        x = 'z'
 
     elif x == 'r':
         print("move right")
         move_right()
-        x = 'z'
+
+    elif x == 's':
+        print("stop all motors")
+        GPIO.output(in1, GPIO.LOW)
+        GPIO.output(in2, GPIO.LOW)
+        GPIO.output(in3, GPIO.LOW)
+        GPIO.output(in4, GPIO.LOW)
 
     elif x == 'e':
         GPIO.cleanup()
