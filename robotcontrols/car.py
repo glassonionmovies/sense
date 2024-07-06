@@ -1,15 +1,15 @@
 import RPi.GPIO as GPIO
 from time import sleep
 
-# Define GPIO pins for motor 1 (left motor)
-in1 = 24
-in2 = 23
-en = 25
+# Define GPIO pins for motor 1 (right motor)
+in1 = 22
+in2 = 27
+en = 17
 
-# Define GPIO pins for motor 2 (right motor)
-in3 = 22
-in4 = 27
-en2 = 17
+# Define GPIO pins for motor 2 (left motor)
+in3 = 24
+in4 = 23
+en2 = 25
 
 # Default duration for turn and move left/right
 t_duration = 1.2
@@ -18,7 +18,7 @@ t_sharp = 50  # Percentage decrease/increase in motor speeds
 # Initialize GPIO
 GPIO.setmode(GPIO.BCM)
 
-# Setup motor 1 GPIO pins
+# Setup motor 1 GPIO pins (right motor)
 GPIO.setup(in1, GPIO.OUT)
 GPIO.setup(in2, GPIO.OUT)
 GPIO.setup(en, GPIO.OUT)
@@ -27,7 +27,7 @@ GPIO.output(in2, GPIO.LOW)
 p1 = GPIO.PWM(en, 1000)
 p1.start(50)  # Default to medium speed (50% duty cycle)
 
-# Setup motor 2 GPIO pins
+# Setup motor 2 GPIO pins (left motor)
 GPIO.setup(in3, GPIO.OUT)
 GPIO.setup(in4, GPIO.OUT)
 GPIO.setup(en2, GPIO.OUT)
@@ -43,9 +43,8 @@ current_speed_p2 = 50
 print("\n")
 print("Default speed & direction of both motors: Medium & Forward.....")
 print("Available commands:")
-print("r - run both motors, s - stop both motors")
 print("f - forward both motors, b - backward both motors")
-print("sl - low speed, sm - medium speed, sh - high speed")
+print("sl - low speed, sm - medium speed, sh - high speed, su - ultra speed")
 print("L - turn left, R - turn right")
 print("l - move left, r - move right")
 print("e - exit")
@@ -67,10 +66,8 @@ def move_left():
     # Restore original speeds
     p1.ChangeDutyCycle(current_speed_p1)
     p2.ChangeDutyCycle(current_speed_p2)
-    current_speed_p1 = 50  # Reset to default medium speed
-    current_speed_p2 = 50
 
-##comment
+
 def move_right():
     global current_speed_p1, current_speed_p2
 
@@ -85,8 +82,6 @@ def move_right():
     # Restore original speeds
     p1.ChangeDutyCycle(current_speed_p1)
     p2.ChangeDutyCycle(current_speed_p2)
-    current_speed_p1 = 50  # Reset to default medium speed
-    current_speed_p2 = 50
 
 
 # Main loop for user input
@@ -94,24 +89,7 @@ while True:
     x = input("Enter command: ")
 
     # Motor control
-    if x == 'r':
-        print("run")
-        GPIO.output(in1, GPIO.HIGH)
-        GPIO.output(in2, GPIO.LOW)
-        GPIO.output(in3, GPIO.HIGH)
-        GPIO.output(in4, GPIO.LOW)
-        print("forward both motors")
-        x = 'z'
-
-    elif x == 's':
-        print("stop")
-        GPIO.output(in1, GPIO.LOW)
-        GPIO.output(in2, GPIO.LOW)
-        GPIO.output(in3, GPIO.LOW)
-        GPIO.output(in4, GPIO.LOW)
-        x = 'z'
-
-    elif x == 'f':
+    if x == 'f':
         print("move forward")
         GPIO.output(in1, GPIO.HIGH)
         GPIO.output(in2, GPIO.LOW)
@@ -151,6 +129,14 @@ while True:
         current_speed_p2 = 75
         x = 'z'
 
+    elif x == 'su':
+        print("ultra speed")
+        p1.ChangeDutyCycle(100)
+        p2.ChangeDutyCycle(100)
+        current_speed_p1 = 100
+        current_speed_p2 = 100
+        x = 'z'
+
     # Additional commands for specific movements
     elif x == 'L':
         print("turn left")
@@ -178,8 +164,6 @@ while True:
         GPIO.output(in4, GPIO.LOW)
         x = 'z'
 
-
-
     elif x == 'l':
         print("move left")
         move_left()
@@ -187,7 +171,6 @@ while True:
 
     elif x == 'r':
         print("move right")
-        # Similar logic as 'l', adjust speeds accordingly
         move_right()
         x = 'z'
 
