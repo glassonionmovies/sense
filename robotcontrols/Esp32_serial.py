@@ -4,12 +4,10 @@
 const int COUNTS_PER_ROTATION = 1;   // Encoder counts per rotation
 
 // Global variables for motor control
-volatile long cumulativeEncoderCountRight = 0;
 volatile long currentEncoderCountRight = 0;
 volatile long targetEncoderCountRight = 0;
 bool motorRunningRight = false;
 
-volatile long cumulativeEncoderCountLeft = 0;
 volatile long currentEncoderCountLeft = 0;
 volatile long targetEncoderCountLeft = 0;
 bool motorRunningLeft = false;
@@ -32,7 +30,6 @@ int getRotations(String command);
 
 void setup() {
   Serial.begin(9600);  // Initialize serial communication
-  Serial.println("Starting...");
 
   // Initialize Right Motor Pins
   pinMode(22, OUTPUT);  // IN1_PIN
@@ -76,13 +73,9 @@ void handleSerialCommands() {
   if (Serial.available() > 0) {
     String serialInput = Serial.readStringUntil('\n');
     serialInput.trim();  // Remove leading/trailing whitespace
-    Serial.print("Command received: ");
-    Serial.println(serialInput);
 
     if (serialInput.startsWith("L:") || serialInput.startsWith("R:") || serialInput.startsWith("B:")) {
       int rotations = getRotations(serialInput);
-      Serial.print("Rotations: ");
-      Serial.println(rotations);
       if (serialInput.startsWith("L:")) {
         rotateMotorLeft(rotations);
       } else if (serialInput.startsWith("R:")) {
@@ -92,40 +85,24 @@ void handleSerialCommands() {
       }
     } else if (serialInput.equals("S")) {
       stopAllMotors();
-      Serial.println("All motors stopped.");
     } else if (serialInput.equals("R")) {
       resetCounters();
-      Serial.println("Counters reset.");
     } else if (serialInput.startsWith("SL:")) {
       int speed = serialInput.substring(3).toInt();
       if (speed >= 0 && speed <= 255) {
         motorRunningSpeedLeft = speed;
-        Serial.print("Left motor speed set to ");
-        Serial.println(motorRunningSpeedLeft);
-      } else {
-        Serial.println("Invalid left motor speed. Please enter a value between 0 and 255.");
       }
     } else if (serialInput.startsWith("SR:")) {
       int speed = serialInput.substring(3).toInt();
       if (speed >= 0 && speed <= 255) {
         motorRunningSpeedRight = speed;
-        Serial.print("Right motor speed set to ");
-        Serial.println(motorRunningSpeedRight);
-      } else {
-        Serial.println("Invalid right motor speed. Please enter a value between 0 and 255.");
       }
     } else if (serialInput.equals("E")) {
-      // Print current encoder counts
-      Serial.print("Right Motor: Current Count = ");
+      // Print current encoder counts in summarized format
+      Serial.print("LeftCount=");
+      Serial.print(currentEncoderCountLeft);
+      Serial.print(",RightCount=");
       Serial.println(currentEncoderCountRight);
-      Serial.print("Left Motor: Current Count = ");
-      Serial.println(currentEncoderCountLeft);
-    } else if (serialInput.equals("C")) {
-      // Print cumulative encoder counts
-      Serial.print("Right Motor: Cumulative Count = ");
-      Serial.println(cumulativeEncoderCountRight);
-      Serial.print("Left Motor: Cumulative Count = ");
-      Serial.println(cumulativeEncoderCountLeft);
     }
   }
 }
@@ -143,8 +120,6 @@ void rotateMotorRight(int rotations) {
     digitalWrite(23, LOW);   // IN2_PIN (reversed)
   }
   analogWrite(17, motorRunningSpeedRight);  // PWM_PIN
-  Serial.print("Right motor started. Target Count = ");
-  Serial.println(targetEncoderCountRight);
 }
 
 void rotateMotorLeft(int rotations) {
@@ -160,8 +135,6 @@ void rotateMotorLeft(int rotations) {
     digitalWrite(33, LOW);   // IN4_PIN (reversed)
   }
   analogWrite(25, motorRunningSpeedLeft);  // PWM_PIN2
-  Serial.print("Left motor started. Target Count = ");
-  Serial.println(targetEncoderCountLeft);
 }
 
 void rotateMotorsBoth(int rotations) {
@@ -185,22 +158,20 @@ void rotateMotorsBoth(int rotations) {
   }
   analogWrite(17, motorRunningSpeedRight);  // PWM_PIN
   analogWrite(25, motorRunningSpeedLeft);   // PWM_PIN2
-  Serial.print("Both motors started. Target Count = ");
-  Serial.println(targetEncoderCountRight);
 }
 
 void stopMotorRight() {
   analogWrite(17, 0);  // PWM_PIN
   motorRunningRight = false;
-  Serial.print("END R ");
-  Serial.println(currentEncoderCountRight);
+  //Serial.print("RightCount=");
+  //Serial.println(currentEncoderCountRight);
 }
 
 void stopMotorLeft() {
   analogWrite(25, 0);  // PWM_PIN2
   motorRunningLeft = false;
-  Serial.print("END L ");
-  Serial.println(currentEncoderCountLeft);
+  //Serial.print("LeftCount=");
+  //Serial.println(currentEncoderCountLeft);
 }
 
 void stopAllMotors() {
@@ -209,10 +180,8 @@ void stopAllMotors() {
 }
 
 void resetCounters() {
-  cumulativeEncoderCountRight = 0;
   currentEncoderCountRight = 0;
   targetEncoderCountRight = 0;
-  cumulativeEncoderCountLeft = 0;
   currentEncoderCountLeft = 0;
   targetEncoderCountLeft = 0;
 }
@@ -238,15 +207,13 @@ void encoderISRRight() {
     case 0b0011:
     case 0b1100:
     case 0b1000:
-      cumulativeEncoderCountRight--;  // Decrement for forward rotation
-      currentEncoderCountRight--;
+      currentEncoderCountRight--;  // Decrement for forward rotation
       break;
     case 0b0010:
     case 0b0110:
     case 0b1101:
     case 0b1011:
-      cumulativeEncoderCountRight++;  // Increment for backward rotation
-      currentEncoderCountRight++;
+      currentEncoderCountRight++;  // Increment for backward rotation
       break;
   }
   lastStateRight = currentStateRight;
@@ -262,24 +229,24 @@ void encoderISRLeft() {
   uint8_t currentStateLeft = (digitalRead(34) << 1) | digitalRead(35);  // ENCODER_PIN_A_LEFT, ENCODER_PIN_B_LEFT
   uint8_t stateLeft = (lastStateLeft << 2) | currentStateLeft;
 
+  // Handle encoder count based on quadrature encoder state
   switch (stateLeft) {
     case 0b0001:
-    case 0b0111:
-    case 0b1110:
+    case 0b0011:
+    case 0b1100:
     case 0b1000:
-      cumulativeEncoderCountLeft++;
-      currentEncoderCountLeft++;
+      currentEncoderCountLeft--;  // Decrement for forward rotation
       break;
     case 0b0010:
-    case 0b0100:
+    case 0b0110:
     case 0b1101:
     case 0b1011:
-      cumulativeEncoderCountLeft--;
-      currentEncoderCountLeft--;
+      currentEncoderCountLeft++;  // Increment for backward rotation
       break;
   }
   lastStateLeft = currentStateLeft;
 
+  // Check if target encoder count has been reached
   if (motorRunningLeft && abs(currentEncoderCountLeft) >= targetEncoderCountLeft) {
     stopMotorLeft();
   }
